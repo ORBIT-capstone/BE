@@ -1,0 +1,76 @@
+# =========================
+# Common
+# =========================
+.env
+.env.*
+!.env.example
+*.log
+.DS_Store
+Thumbs.db
+
+# =========================
+# IDE / Editor
+# =========================
+.idea/
+*.iml
+.vscode/
+.project
+.classpath
+.settings/
+
+# =========================
+# Java / Spring Boot / Gradle
+# =========================
+.gradle/
+build/
+out/
+target/
+
+# Gradle wrapper jar는 보통 올리는 게 맞음
+!gradle/wrapper/gradle-wrapper.jar
+
+# Spring Boot generated files
+HELP.md
+
+# =========================
+# Python / FastAPI
+# =========================
+venv/
+.venv/
+env/
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Python packaging
+dist/
+build/
+*.egg-info/
+
+# Test / Coverage
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# =========================
+# MySQL / DB / Local Data
+# =========================
+*.db
+*.sqlite
+*.sqlite3
+mysql_data/
+data/
+
+# =========================
+# Docker
+# =========================
+*.pid
+
+# =========================
+# OS / Temp
+# =========================
+tmp/
+temp/
