@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 
-from app.routers import active
+from app.routers import employed
 
 app = FastAPI(
     title="ORBIT FastAPI Server",
@@ -8,14 +8,7 @@ app = FastAPI(
     version="0.1.0"
 )
 
-app.include_router(active.router)
-
-
-@app.get("/")
-def root():
-    return {
-        "message": "ORBIT FastAPI server is running"
-    }
+app.include_router(employed.router)
 
 
 @app.get("/health")
