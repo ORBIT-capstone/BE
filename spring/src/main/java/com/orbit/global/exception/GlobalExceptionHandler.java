@@ -1,6 +1,9 @@
 package com.orbit.global.exception;
 
 import com.orbit.users.exception.DuplicateEmailException;
+import com.orbit.users.exception.InvalidCredentialsException;
+import com.orbit.users.exception.InvalidTokenException;
+import com.orbit.users.exception.UnauthorizedException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.HttpMediaTypeNotSupportedException;
@@ -30,6 +33,24 @@ public class GlobalExceptionHandler {
 	public ResponseEntity<ErrorResponse> handleDuplicateEmail(DuplicateEmailException exception) {
 		return ResponseEntity.status(HttpStatus.UNPROCESSABLE_ENTITY)
 			.body(ErrorResponse.of("DUPLICATE_EMAIL", exception.getMessage()));
+	}
+
+	@ExceptionHandler(InvalidCredentialsException.class)
+	public ResponseEntity<ErrorResponse> handleInvalidCredentials(InvalidCredentialsException exception) {
+		return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+			.body(ErrorResponse.of("INVALID_CREDENTIALS", exception.getMessage()));
+	}
+
+	@ExceptionHandler(UnauthorizedException.class)
+	public ResponseEntity<ErrorResponse> handleUnauthorized(UnauthorizedException exception) {
+		return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+			.body(ErrorResponse.of("UNAUTHORIZED", exception.getMessage()));
+	}
+
+	@ExceptionHandler(InvalidTokenException.class)
+	public ResponseEntity<ErrorResponse> handleInvalidToken(InvalidTokenException exception) {
+		return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+			.body(ErrorResponse.of("INVALID_TOKEN", exception.getMessage()));
 	}
 
 	@ExceptionHandler(NoResourceFoundException.class)

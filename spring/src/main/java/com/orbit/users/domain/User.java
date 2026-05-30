@@ -30,6 +30,9 @@ public class User {
 	@Column(nullable = false)
 	private String password;
 
+	@Column(name = "refresh_token_hash", length = 512)
+	private String refreshTokenHash;
+
 	@Column(nullable = false, length = 20)
 	private String name;
 
@@ -59,5 +62,13 @@ public class User {
 		this.birthDate = birthDate;
 		this.gender = gender;
 		this.employmentStatus = employmentStatus;
+	}
+
+	public void updateRefreshTokenHash(String refreshTokenHash) {
+		this.refreshTokenHash = refreshTokenHash;
+	}
+
+	public void clearRefreshTokenHash() {
+		this.refreshTokenHash = null;
 	}
 }
