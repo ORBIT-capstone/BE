@@ -1,5 +1,5 @@
-from app.repositories.employed_income_repository import get_band_mean
-from app.schemas.employed import SimulateRequest, SimulateResponse
+from app.repositories.employees_income_repository import get_band_mean
+from app.schemas.employees import SimulateRequest, SimulateResponse
 
 
 # 근속월수 구간명
@@ -24,7 +24,7 @@ def _severance_rate(years: float) -> float:
     return 0.39
 
 
-def simulate_employed(req: SimulateRequest) -> SimulateResponse:
+def simulate_employees(req: SimulateRequest) -> SimulateResponse:
     current_months = req.current_years * 12
     retire_after_months = (req.retire_at_age - req.current_age) * 12
     retire_months = current_months + retire_after_months
