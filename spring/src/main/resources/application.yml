@@ -1,3 +1,9 @@
 spring:
   profiles:
     default: local
+
+springdoc:
+  swagger-ui:
+    path: /api/docs
+  api-docs:
+    path: /api/v3/api-docs
