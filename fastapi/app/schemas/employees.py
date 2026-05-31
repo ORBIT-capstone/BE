@@ -21,4 +21,5 @@ class SimulateResponse(BaseModel):
     income_factor: float
     estimated_avg_income: int
     monthly_pension: int
+    lump_sum: int
     severance_pay: int
