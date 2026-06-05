@@ -2,7 +2,9 @@ package com.orbit.users.service;
 
 import com.orbit.users.domain.User;
 import com.orbit.users.dto.SignupRequest;
+import com.orbit.users.dto.UpdateUserRequest;
 import com.orbit.users.exception.DuplicateEmailException;
+import com.orbit.users.exception.InvalidTokenException;
 import com.orbit.users.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -37,5 +39,20 @@ public class UserService {
 	@Transactional
 	public void delete(User user) {
 		userRepository.delete(user);
+	}
+
+	@Transactional
+	public User update(Long userId, UpdateUserRequest request) {
+		User user = userRepository.findById(userId)
+			.orElseThrow(InvalidTokenException::new);
+
+		user.updateProfile(
+			request.name(),
+			request.birthDate(),
+			request.gender(),
+			request.employmentStatus()
+		);
+
+		return user;
 	}
 }

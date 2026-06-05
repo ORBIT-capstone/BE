@@ -22,7 +22,7 @@ public enum EmploymentStatus {
 				return employmentStatus;
 			}
 		}
-		throw new IllegalArgumentException("지원하지 않는 재직 상태입니다.");
+		throw new IllegalArgumentException("employmentStatus는 employees 또는 retirees 중 하나여야 합니다.");
 	}
 
 	@JsonValue
