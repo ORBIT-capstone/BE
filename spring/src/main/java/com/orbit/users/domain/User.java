@@ -71,4 +71,24 @@ public class User {
 	public void clearRefreshTokenHash() {
 		this.refreshTokenHash = null;
 	}
+
+	public void updateProfile(
+		String name,
+		LocalDate birthDate,
+		Gender gender,
+		EmploymentStatus employmentStatus
+	) {
+		if (name != null) {
+			this.name = name;
+		}
+		if (birthDate != null) {
+			this.birthDate = birthDate;
+		}
+		if (gender != null) {
+			this.gender = gender;
+		}
+		if (employmentStatus != null) {
+			this.employmentStatus = employmentStatus;
+		}
+	}
 }

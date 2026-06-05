@@ -5,6 +5,7 @@ import com.orbit.users.exception.InvalidCredentialsException;
 import com.orbit.users.exception.InvalidTokenException;
 import com.orbit.users.exception.UnauthorizedException;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.HttpMediaTypeNotSupportedException;
 import org.springframework.web.HttpRequestMethodNotSupportedException;
@@ -69,6 +70,17 @@ public class GlobalExceptionHandler {
 	public ResponseEntity<ErrorResponse> handleUnsupportedMediaType(HttpMediaTypeNotSupportedException exception) {
 		return ResponseEntity.status(HttpStatus.UNSUPPORTED_MEDIA_TYPE)
 			.body(ErrorResponse.of("UNSUPPORTED_MEDIA_TYPE", "지원하지 않는 요청 형식입니다."));
+	}
+
+	@ExceptionHandler(HttpMessageNotReadableException.class)
+	public ResponseEntity<ErrorResponse> handleMessageNotReadable(HttpMessageNotReadableException exception) {
+		String message = exception.getMostSpecificCause().getMessage();
+		if (message == null || message.isBlank()) {
+			message = "요청 본문을 읽을 수 없습니다.";
+		}
+
+		return ResponseEntity.badRequest()
+			.body(ErrorResponse.of("INVALID_REQUEST", message));
 	}
 
 	@ExceptionHandler(Exception.class)
