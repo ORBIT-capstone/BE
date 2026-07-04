@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 
-from app.routers import employees
+from app.routers import employees, retirement
 
 app = FastAPI(
     title="ORBIT FastAPI Server",
@@ -10,6 +10,7 @@ app = FastAPI(
 )
 
 app.include_router(employees.router)
+app.include_router(retirement.router)
 
 
 @app.get("/health")
