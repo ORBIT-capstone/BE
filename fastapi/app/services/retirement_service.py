@@ -11,7 +11,7 @@ from app.schemas.retirement import (
     SimulationResult,
     TimelinePoint,
 )
-from app.services.employees_service import LUMP_SUM_CONVERSION_FACTOR
+from app.services.employees_service import LUMP_SUM_CONVERSION_FACTOR, PENSION_RATE
 from app.services.reduction_rules import calculate_bracket_reduction, get_reduction_rule
 
 INVESTMENT_RETURN = 0.03  # 자산 운용 수익률
@@ -23,8 +23,12 @@ TARGET_AGE_FEMALE = 88  # 여성 목표연령 (통계청 생명표 60세 기대�
 SAVING_CAP_RATIO = 0.3  # 절약 상한 비율 (월 생활비 대비)
 SEARCH_PRECISION = 0.01  # 이진탐색 종료 정밀도 (만원)
 MAX_REDUCTION_RATIO = 0.5  # 감액 상한 비율 (노령연금액의 1/2 초과 감액 불가)
-EARLY_REDUCTION_RATE = 0.3  # 조기수령 감액률 (5년 조기수령 시 월 0.5% x 60개월 최대 감액)
-INSTALLMENT_SPLIT_RATIO = 0.5  # 분할수령 시 일시금/월연금 배분 비율
+EARLY_REDUCTION_RATE_PER_YEAR = 0.05  # 조기수령 1년당 감액률 (사학연금 조기노령연금 기준, 평생 적용)
+EARLY_YEARS_MIN = 1  # 조기수령 최소 연수
+EARLY_YEARS_MAX = 5  # 조기수령 최대 연수 (5년 조기수령 시 최대 25% 감액)
+LUMP_SUM_SQUARE_FACTOR = 65 / 10000  # 공제일시금 2차 계수 (공제연수 제곱 가산분, 사학연금공단 공제일시금 산식)
+MIN_PENSION_YEARS = 10  # 연금 선택 최소 연수 (공제일시금 일부 선택 시)
+MAX_DEDUCTION_YEARS = 26  # 공제일시금 선택 최대 연수
 
 
 def get_target_age(gender: str) -> int:
@@ -171,6 +175,7 @@ def recommend_retirement(
             recommendation_type=RecommendationType.SUFFICIENT,
             required_saving=0.0,
             required_income=0.0,
+            target_status=ReadinessStatus.SUFFICIENT,
             depletion_age=baseline.depletion_age,
             target_age=baseline.target_age,
             status=baseline.status,
@@ -185,7 +190,7 @@ def recommend_retirement(
             asset=asset,
             gender=gender,
         )
-        return result.status != ReadinessStatus.INSUFFICIENT
+        return result.status == ReadinessStatus.SUFFICIENT
 
     saving_cap = monthly_expenses * SAVING_CAP_RATIO
 
@@ -214,6 +219,7 @@ def recommend_retirement(
         recommendation_type=recommendation_type,
         required_saving=required_saving,
         required_income=required_income,
+        target_status=ReadinessStatus.SUFFICIENT,
         depletion_age=improved.depletion_age,
         target_age=improved.target_age,
         status=improved.status,
@@ -265,11 +271,75 @@ def simulate_pension_reduction(
     )
 
 
-def _calculate_lump_sum(monthly_pension: float, current_age: int, target_age: int) -> float:
-    """월연금을 일시금으로 환산한다. employees_service의 일시금 환산 계수(기존 로직)를
-    그대로 재사용해 '월연금 x 12 x 잔여연수'에 적용한다."""
-    remaining_years = max(target_age - current_age, 0)
-    return monthly_pension * 12 * remaining_years * LUMP_SUM_CONVERSION_FACTOR
+def _calculate_lump_sum_and_pension(
+    base_monthly_income: float,
+    total_service_years: float,
+    deduction_years: float,
+) -> tuple[float, float]:
+    """공제일시금(퇴직연금공제일시금 방식)과 잔여 연금을 계산한다.
+
+    공제일시금 = 기준소득월액 x 공제연수 x (LUMP_SUM_CONVERSION_FACTOR + LUMP_SUM_SQUARE_FACTOR x 공제연수)
+    (사학연금공단 공식: 기준소득월액x(공제재직월수/12)x975/1000 + 기준소득월액x(공제재직월수/12)^2x65/10000)
+
+    연금 부분은 재직연수를 '연금 선택 연수'(=총재직연수-공제연수)로 치환해
+    employees_service의 기존 퇴직연금 산식(PENSION_RATE)을 그대로 재사용한다.
+
+    deduction_years == total_service_years(전액 공제)이면 연금 선택 연수가 0이 되어
+    monthly_pension=0, lump_sum은 곧 퇴직연금일시금(LUMP_SUM) 산식과 동일해진다 —
+    LUMP_SUM/SPLIT(분할) 두 시나리오 모두 이 함수 하나로 계산한다(중복 계산 없음).
+    """
+    lump_sum = base_monthly_income * deduction_years * (
+        LUMP_SUM_CONVERSION_FACTOR + LUMP_SUM_SQUARE_FACTOR * deduction_years
+    )
+    pension_years = total_service_years - deduction_years
+    monthly_pension = base_monthly_income * pension_years * PENSION_RATE
+    return lump_sum, monthly_pension
+
+
+def _resolve_split_deduction_years(total_service_years: int, deduction_years: int | None) -> int:
+    """SPLIT(분할수령) 시나리오의 공제연수를 결정하고 제약을 검증한다.
+
+    제약: 연금 선택 기간(=총재직연수-공제연수) >= MIN_PENSION_YEARS, 공제연수 <= MAX_DEDUCTION_YEARS.
+    deduction_years가 주어지지 않으면 제약을 만족하는 최댓값으로 클램프한다.
+    """
+    max_allowed = min(total_service_years - MIN_PENSION_YEARS, MAX_DEDUCTION_YEARS)
+
+    if deduction_years is None:
+        if max_allowed < 0:
+            raise ValueError(
+                f"총 재직연수가 {MIN_PENSION_YEARS}년 미만이면 분할수령(SPLIT)을 선택할 수 없습니다."
+            )
+        return max_allowed
+
+    if deduction_years < 0 or deduction_years > MAX_DEDUCTION_YEARS:
+        raise ValueError(f"deduction_years는 0~{MAX_DEDUCTION_YEARS} 사이여야 합니다.")
+    if total_service_years - deduction_years < MIN_PENSION_YEARS:
+        raise ValueError(f"연금 선택 기간(총재직연수-deduction_years)은 {MIN_PENSION_YEARS}년 이상이어야 합니다.")
+
+    return deduction_years
+
+
+def _cumulative_received(timeline: list[TimelinePoint], upfront: float) -> list[float]:
+    """timeline과 같은 순서(나이 오름차순)로, 각 시점까지의 누적 수령액(업프론트 일시금 포함)을 반환"""
+    cumulative: list[float] = []
+    running = upfront
+    for point in timeline:
+        running += point.income
+        cumulative.append(running)
+    return cumulative
+
+
+def _calculate_break_even_age(
+    timeline: list[TimelinePoint],
+    normal_cumulative: list[float],
+    scenario_cumulative: list[float],
+) -> int | None:
+    """NORMAL 대비 손익분기 나이: NORMAL의 누적 수령액이 이 시나리오의 누적 수령액을
+    처음으로 따라잡거나 넘어서는 나이. 끝까지 따라잡지 못하면(이 시나리오가 항상 유리) None."""
+    for point, normal_cum, scenario_cum in zip(timeline, normal_cumulative, scenario_cumulative):
+        if normal_cum >= scenario_cum:
+            return point.age
+    return None
 
 
 def simulate_scenarios(
@@ -278,28 +348,44 @@ def simulate_scenarios(
     monthly_pension: float,
     asset: float,
     gender: str,
+    base_monthly_income: float,
+    total_service_years: int,
+    early_years: int = EARLY_YEARS_MAX,
+    deduction_years: int | None = None,
 ) -> ScenariosResult:
     """정상/조기/일시금/분할 4가지 연금 수령방식을 diagnose_core()에 파라미터만 바꿔
     순차(동기 for 루프)로 실행하고 비교한다. 자산 시뮬레이션 로직은 diagnose_core()에
     전적으로 위임하며, 방식별 monthly_pension/asset 조합만 여기서 계산한다.
 
-    일시금 분기(monthly_pension=0으로 두고 자산에 일시금을 더하는 방식)는
-    employees_service.simulate_employees()의 기존 일시금 처리 패턴을 재사용한다.
+    NORMAL/EARLY는 입력된 monthly_pension을 그대로 사용하고, LUMP_SUM/SPLIT는
+    기준소득월액(base_monthly_income)·총재직연수(total_service_years) 기반
+    공제일시금 산식(_calculate_lump_sum_and_pension)으로 재계산한다.
+    총 수령액은 모든 시나리오에 대해 동일하게 current_age~MAX_AGE 기간으로 합산한다.
     """
-    target_age = get_target_age(gender)
-    lump_sum = _calculate_lump_sum(monthly_pension, current_age, target_age)
+    if not (EARLY_YEARS_MIN <= early_years <= EARLY_YEARS_MAX):
+        raise ValueError(f"early_years는 {EARLY_YEARS_MIN}~{EARLY_YEARS_MAX} 사이여야 합니다.")
+    if total_service_years <= 0:
+        raise ValueError("total_service_years는 0보다 커야 합니다.")
+
+    # LUMP_SUM: 전액 공제(공제연수=총재직연수) -> 연금 선택 연수 0, 공제일시금 산식만 남음
+    full_lump_sum, full_pension = _calculate_lump_sum_and_pension(
+        base_monthly_income, total_service_years, total_service_years
+    )
+
+    # SPLIT(분할수령): 요청된(또는 제약 내 최댓값으로 클램프된) 공제연수만큼만 일시금으로 전환
+    split_deduction_years = _resolve_split_deduction_years(total_service_years, deduction_years)
+    split_lump_sum, split_pension = _calculate_lump_sum_and_pension(
+        base_monthly_income, total_service_years, split_deduction_years
+    )
 
     scenario_inputs: dict[ScenarioType, tuple[float, float]] = {
         ScenarioType.NORMAL: (monthly_pension, asset),
-        ScenarioType.EARLY: (monthly_pension * (1 - EARLY_REDUCTION_RATE), asset),
-        ScenarioType.LUMP_SUM: (0.0, asset + lump_sum),
-        ScenarioType.INSTALLMENT: (
-            monthly_pension * INSTALLMENT_SPLIT_RATIO,
-            asset + lump_sum * INSTALLMENT_SPLIT_RATIO,
-        ),
+        ScenarioType.EARLY: (monthly_pension * (1 - EARLY_REDUCTION_RATE_PER_YEAR * early_years), asset),
+        ScenarioType.LUMP_SUM: (full_pension, asset + full_lump_sum),
+        ScenarioType.INSTALLMENT: (split_pension, asset + split_lump_sum),
     }
 
-    outcomes: list[ScenarioOutcome] = []
+    simulated: dict[ScenarioType, tuple[SimulationResult, float, list[float]]] = {}
     for scenario_type, (scenario_pension, scenario_asset) in scenario_inputs.items():
         result = diagnose_core(
             current_age=current_age,
@@ -308,16 +394,28 @@ def simulate_scenarios(
             asset=scenario_asset,
             gender=gender,
         )
+        upfront = scenario_asset - asset  # 초기 자산에 더해진 일시금(있는 경우)
+        cumulative = _cumulative_received(result.timeline, upfront)
+        simulated[scenario_type] = (result, upfront, cumulative)
 
+    normal_result, _normal_upfront, normal_cumulative = simulated[ScenarioType.NORMAL]
+
+    outcomes: list[ScenarioOutcome] = []
+    for scenario_type, (result, _upfront, cumulative) in simulated.items():
         depletion_age = result.depletion_age if result.depletion_age is not None else MAX_AGE
-        upfront_lump_sum = scenario_asset - asset  # 초기 자산에 더해진 일시금(있는 경우)
-        total_received = sum(point.income for point in result.timeline) + upfront_lump_sum
+        total_received = cumulative[-1] if cumulative else 0.0
+        break_even_age = (
+            None
+            if scenario_type == ScenarioType.NORMAL
+            else _calculate_break_even_age(normal_result.timeline, normal_cumulative, cumulative)
+        )
 
         outcomes.append(
             ScenarioOutcome(
                 scenario_type=scenario_type,
                 depletion_age=depletion_age,
                 total_received=round(total_received, 2),
+                break_even_age=break_even_age,
                 timeline=result.timeline,
             )
         )

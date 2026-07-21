@@ -1,5 +1,7 @@
 package com.orbit.global.exception;
 
+import com.orbit.diagnoses.exception.DiagnosisNotFoundException;
+import com.orbit.diagnoses.exception.FastApiUnavailableException;
 import com.orbit.users.exception.DuplicateEmailException;
 import com.orbit.users.exception.InvalidCredentialsException;
 import com.orbit.users.exception.InvalidTokenException;
@@ -12,6 +14,7 @@ import org.springframework.web.HttpRequestMethodNotSupportedException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 import org.springframework.web.servlet.resource.NoResourceFoundException;
 
 @RestControllerAdvice
@@ -54,10 +57,29 @@ public class GlobalExceptionHandler {
 			.body(ErrorResponse.of("INVALID_TOKEN", exception.getMessage()));
 	}
 
+	@ExceptionHandler(MethodArgumentTypeMismatchException.class)
+	public ResponseEntity<ErrorResponse> handleTypeMismatch(MethodArgumentTypeMismatchException exception) {
+		String message = exception.getName() + " 값이 올바르지 않습니다.";
+		return ResponseEntity.badRequest()
+			.body(ErrorResponse.of("INVALID_REQUEST", message));
+	}
+
 	@ExceptionHandler(NoResourceFoundException.class)
 	public ResponseEntity<ErrorResponse> handleNotFound(NoResourceFoundException exception) {
 		return ResponseEntity.status(HttpStatus.NOT_FOUND)
 			.body(ErrorResponse.of("NOT_FOUND", "요청한 리소스를 찾을 수 없습니다."));
+	}
+
+	@ExceptionHandler(DiagnosisNotFoundException.class)
+	public ResponseEntity<ErrorResponse> handleDiagnosisNotFound(DiagnosisNotFoundException exception) {
+		return ResponseEntity.status(HttpStatus.NOT_FOUND)
+			.body(ErrorResponse.of("DIAGNOSIS_NOT_FOUND", exception.getMessage()));
+	}
+
+	@ExceptionHandler(FastApiUnavailableException.class)
+	public ResponseEntity<ErrorResponse> handleFastApiUnavailable(FastApiUnavailableException exception) {
+		return ResponseEntity.status(HttpStatus.BAD_GATEWAY)
+			.body(ErrorResponse.of("FASTAPI_UNAVAILABLE", exception.getMessage()));
 	}
 
 	@ExceptionHandler(HttpRequestMethodNotSupportedException.class)
