@@ -2,10 +2,13 @@ package com.orbit.diagnoses.client;
 
 import com.orbit.diagnoses.dto.DiagnosisRequest;
 import com.orbit.diagnoses.exception.FastApiUnavailableException;
+import java.net.http.HttpClient;
+import java.time.Duration;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.MediaType;
+import org.springframework.http.client.JdkClientHttpRequestFactory;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientException;
@@ -18,8 +21,21 @@ public class FastApiDiagnosisClient {
 
 	private final RestClient restClient;
 
-	public FastApiDiagnosisClient(@Value("${fastapi.base-url}") String baseUrl) {
-		this.restClient = RestClient.builder().baseUrl(baseUrl).build();
+	public FastApiDiagnosisClient(
+		@Value("${fastapi.base-url}") String baseUrl,
+		@Value("${fastapi.connect-timeout-ms:3000}") long connectTimeoutMs,
+		@Value("${fastapi.read-timeout-ms:5000}") long readTimeoutMs
+	) {
+		HttpClient httpClient = HttpClient.newBuilder()
+			.connectTimeout(Duration.ofMillis(connectTimeoutMs))
+			.build();
+		JdkClientHttpRequestFactory requestFactory = new JdkClientHttpRequestFactory(httpClient);
+		requestFactory.setReadTimeout(Duration.ofMillis(readTimeoutMs));
+
+		this.restClient = RestClient.builder()
+			.baseUrl(baseUrl)
+			.requestFactory(requestFactory)
+			.build();
 	}
 
 	public JsonNode diagnose(DiagnosisRequest request) {

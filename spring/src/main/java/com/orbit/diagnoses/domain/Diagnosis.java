@@ -13,8 +13,6 @@ import lombok.AccessLevel;
 import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
-import org.hibernate.annotations.JdbcTypeCode;
-import org.hibernate.type.SqlTypes;
 
 @Entity
 @Getter
@@ -37,7 +35,6 @@ public class Diagnosis {
 	@Column(name = "depletion_age")
 	private Integer depletionAge;
 
-	@JdbcTypeCode(SqlTypes.JSON)
 	@Column(name = "result_json", nullable = false, columnDefinition = "json")
 	private String resultJson;
 

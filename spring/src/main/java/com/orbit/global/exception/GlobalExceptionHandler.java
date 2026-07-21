@@ -14,6 +14,7 @@ import org.springframework.web.HttpRequestMethodNotSupportedException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 import org.springframework.web.servlet.resource.NoResourceFoundException;
 
 @RestControllerAdvice
@@ -54,6 +55,13 @@ public class GlobalExceptionHandler {
 	public ResponseEntity<ErrorResponse> handleInvalidToken(InvalidTokenException exception) {
 		return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
 			.body(ErrorResponse.of("INVALID_TOKEN", exception.getMessage()));
+	}
+
+	@ExceptionHandler(MethodArgumentTypeMismatchException.class)
+	public ResponseEntity<ErrorResponse> handleTypeMismatch(MethodArgumentTypeMismatchException exception) {
+		String message = exception.getName() + " 값이 올바르지 않습니다.";
+		return ResponseEntity.badRequest()
+			.body(ErrorResponse.of("INVALID_REQUEST", message));
 	}
 
 	@ExceptionHandler(NoResourceFoundException.class)

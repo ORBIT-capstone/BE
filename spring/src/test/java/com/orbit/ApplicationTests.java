@@ -65,7 +65,7 @@ class ApplicationTests {
 
 		String accessToken = objectMapper.readTree(loginResponse)
 			.get("accessToken")
-			.asText();
+			.asString();
 
 		mockMvc.perform(patch("/api/users/me")
 				.header("Authorization", "Bearer " + accessToken)
