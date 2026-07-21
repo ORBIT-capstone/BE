@@ -23,13 +23,14 @@ public class DiagnosisService {
 	private final FastApiDiagnosisClient fastApiDiagnosisClient;
 	private final ObjectMapper objectMapper;
 
-	@Transactional
 	public JsonNode createDiagnosis(Long userId, DiagnosisRequest request) {
+		// FastAPI 호출 완료 후에만 저장을 수행한다(트랜잭션 없이) — 호출 실패 시 자연스럽게 미저장되고,
+		// 네트워크 대기 동안 DB 커넥션을 점유하지 않는다.
 		JsonNode result = fastApiDiagnosisClient.diagnose(request);
 
 		Diagnosis diagnosis = Diagnosis.builder()
 			.userId(userId)
-			.status(result.path("status").asText(null))
+			.status(result.path("status").asString(null))
 			.depletionAge(result.hasNonNull("depletion_age") ? result.get("depletion_age").asInt() : null)
 			.resultJson(result.toString())
 			.build();
@@ -60,7 +61,7 @@ public class DiagnosisService {
 			// H2(MySQL 모드)의 JSON 컬럼은 문자열 바인딩 시 값을 한 번 더 JSON 문자열로
 			// 감싸 저장하는 경우가 있어(MySQL 실제 환경에서는 발생하지 않음), 텍스트 노드로
 			// 읽힌 경우에 한해 한 번 더 파싱해 원래 결과 트리를 복원한다.
-			return node.isTextual() ? objectMapper.readTree(node.asText()) : node;
+			return node.isString() ? objectMapper.readTree(node.asString()) : node;
 		} catch (JacksonException exception) {
 			throw new IllegalStateException("저장된 진단 결과를 읽을 수 없습니다.", exception);
 		}

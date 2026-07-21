@@ -54,6 +54,7 @@ class RecommendationResult(BaseModel):
     recommendation_type: RecommendationType  # 추천 유형
     required_saving: float  # 필요 월 절약액 (만원)
     required_income: float  # 필요 월 추가 소득액 (만원)
+    target_status: ReadinessStatus  # 추천 산정에 사용된 목표 기준 (항상 SUFFICIENT="고갈 없음")
     depletion_age: int | None  # 개선 적용 후 자산 고갈 나이
     target_age: int  # 목표연령
     status: ReadinessStatus  # 개선 적용 후 노후 준비 상태
@@ -80,7 +81,12 @@ class ReductionResult(BaseModel):
 
 
 class ScenariosRequest(DiagnosisRequest):
-    """진단(diagnosis)과 동일한 입력 스키마를 재사용"""
+    """진단(diagnosis)과 동일한 입력 스키마를 재사용하고 수령방식 계산에 필요한 필드를 추가"""
+
+    early_years: int = 5  # 조기수령 연수 (1~5년, 1년당 5% 감액)
+    base_monthly_income: float  # 기준소득월액 (만원) - LUMP_SUM/SPLIT 공제일시금 산식에 사용
+    total_service_years: int  # 총 재직연수 - LUMP_SUM/SPLIT 공제일시금 산식에 사용
+    deduction_years: int | None = None  # SPLIT(분할수령) 공제연수. 미지정 시 제약 내 최댓값으로 클램프
 
 
 class ScenarioType(str, Enum):
@@ -95,7 +101,8 @@ class ScenarioType(str, Enum):
 class ScenarioOutcome(BaseModel):
     scenario_type: ScenarioType  # 수령방식
     depletion_age: int  # 자산 고갈 나이 (고갈되지 않으면 MAX_AGE)
-    total_received: float  # 총 수령액 (만원)
+    total_received: float  # 총 수령액 (만원, current_age~MAX_AGE 동일 기간 기준)
+    break_even_age: int | None  # NORMAL 대비 손익분기 나이 (이 나이 이상 생존 시 NORMAL이 유리해짐). NORMAL 자신은 None
     timeline: list[TimelinePoint]  # 연도별 자산 추이
 
 

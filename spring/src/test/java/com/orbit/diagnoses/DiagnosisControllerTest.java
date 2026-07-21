@@ -85,7 +85,7 @@ class DiagnosisControllerTest {
 			.getResponse()
 			.getContentAsString();
 
-		accessToken = objectMapper.readTree(loginResponse).get("accessToken").asText();
+		accessToken = objectMapper.readTree(loginResponse).get("accessToken").asString();
 	}
 
 	private JsonNode fastApiResult(int depletionAge, String status) throws Exception {
@@ -218,7 +218,7 @@ class DiagnosisControllerTest {
 			.andReturn()
 			.getResponse()
 			.getContentAsString();
-		String otherAccessToken = objectMapper.readTree(otherLoginResponse).get("accessToken").asText();
+		String otherAccessToken = objectMapper.readTree(otherLoginResponse).get("accessToken").asString();
 
 		mockMvc.perform(get("/api/diagnoses/" + id)
 				.header("Authorization", "Bearer " + otherAccessToken))
@@ -232,6 +232,14 @@ class DiagnosisControllerTest {
 				.header("Authorization", "Bearer " + accessToken))
 			.andExpect(status().isNotFound())
 			.andExpect(jsonPath("$.code").value("DIAGNOSIS_NOT_FOUND"));
+	}
+
+	@Test
+	void getDiagnosisWithNonNumericIdReturns400() throws Exception {
+		mockMvc.perform(get("/api/diagnoses/abc")
+				.header("Authorization", "Bearer " + accessToken))
+			.andExpect(status().isBadRequest())
+			.andExpect(jsonPath("$.code").value("INVALID_REQUEST"));
 	}
 
 	@Test

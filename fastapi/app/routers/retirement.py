@@ -93,6 +93,10 @@ def scenarios(req: ScenariosRequest) -> ScenariosResult:
             monthly_pension=req.monthly_pension,
             asset=req.asset,
             gender=req.gender,
+            base_monthly_income=req.base_monthly_income,
+            total_service_years=req.total_service_years,
+            early_years=req.early_years,
+            deduction_years=req.deduction_years,
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))

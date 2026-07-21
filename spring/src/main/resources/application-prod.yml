@@ -14,3 +14,5 @@ spring:
 
 fastapi:
   base-url: ${FASTAPI_BASE_URL}
+  connect-timeout-ms: ${FASTAPI_CONNECT_TIMEOUT_MS:3000}
+  read-timeout-ms: ${FASTAPI_READ_TIMEOUT_MS:5000}

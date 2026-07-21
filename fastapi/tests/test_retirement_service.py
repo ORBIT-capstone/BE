@@ -4,11 +4,16 @@ from app.schemas.retirement import ReadinessStatus, RecommendationType, Scenario
 from app.services import retirement_service
 from app.services.reduction_rules import get_reduction_rule
 from app.services.retirement_service import (
+    EARLY_REDUCTION_RATE_PER_YEAR,
     MAX_AGE,
+    MAX_DEDUCTION_YEARS,
     MAX_REDUCTION_RATIO,
+    MIN_PENSION_YEARS,
     SAVING_CAP_RATIO,
     TARGET_AGE_FEMALE,
     TARGET_AGE_MALE,
+    _calculate_lump_sum_and_pension,
+    _resolve_split_deduction_years,
     calculate_status,
     get_target_age,
     recommend_retirement,
@@ -136,10 +141,11 @@ def test_recommend_retirement_saving_only_within_cap():
 
     assert result.recommendation_type == RecommendationType.SAVING_ONLY
     assert result.required_income == 0.0
+    assert result.target_status == ReadinessStatus.SUFFICIENT
     assert 0 < result.required_saving <= monthly_expenses * SAVING_CAP_RATIO
-    assert result.status != ReadinessStatus.INSUFFICIENT
+    assert result.status == ReadinessStatus.SUFFICIENT
 
-    # 개선안(절약 적용) 시뮬레이션이 실제로 목표연령 이상까지 자산을 유지시키는지 검증
+    # 개선안(절약 적용) 시뮬레이션이 실제로 자산 고갈 없이(SUFFICIENT) 유지되는지 검증
     improved = simulate_retirement(
         current_age=60,
         monthly_expenses=monthly_expenses - result.required_saving,
@@ -147,9 +153,9 @@ def test_recommend_retirement_saving_only_within_cap():
         asset=15_000,
         gender="male",
     )
-    assert improved.status != ReadinessStatus.INSUFFICIENT
+    assert improved.status == ReadinessStatus.SUFFICIENT
 
-    # required_saving이 최소값에 가까운지: 조금 덜 절약하면 여전히 부족해야 함
+    # required_saving이 최소값에 가까운지: 조금 덜 절약하면 여전히 SUFFICIENT에 못 미쳐야 함
     under_saving = simulate_retirement(
         current_age=60,
         monthly_expenses=monthly_expenses - (result.required_saving - 1.0),
@@ -157,7 +163,33 @@ def test_recommend_retirement_saving_only_within_cap():
         asset=15_000,
         gender="male",
     )
-    assert under_saving.status == ReadinessStatus.INSUFFICIENT
+    assert under_saving.status != ReadinessStatus.SUFFICIENT
+
+
+def test_recommend_retirement_middle_baseline_gets_meaningful_saving():
+    # baseline이 이미 MIDDLE(고갈되지만 target_age 이후)이어도, 목표 기준은 SUFFICIENT(고갈 없음)이므로
+    # required_saving이 0에 가까운 무의미한 값이 아니라 실제로 유의미해야 한다
+    baseline = simulate_retirement(
+        current_age=60,
+        monthly_expenses=250,
+        monthly_pension=150,
+        asset=32_000,
+        gender="male",
+    )
+    assert baseline.status == ReadinessStatus.MIDDLE
+
+    result = recommend_retirement(
+        current_age=60,
+        monthly_expenses=250,
+        monthly_pension=150,
+        asset=32_000,
+        gender="male",
+    )
+
+    assert result.recommendation_type == RecommendationType.SAVING_ONLY
+    assert result.target_status == ReadinessStatus.SUFFICIENT
+    assert result.status == ReadinessStatus.SUFFICIENT
+    assert result.required_saving > 10.0  # 0.01만원 같은 무의미한 값이 아님
 
 
 def test_recommend_retirement_saving_and_income_when_cap_alone_insufficient():
@@ -173,7 +205,8 @@ def test_recommend_retirement_saving_and_income_when_cap_alone_insufficient():
     assert result.recommendation_type == RecommendationType.SAVING_AND_INCOME
     assert result.required_saving == pytest.approx(monthly_expenses * SAVING_CAP_RATIO)
     assert result.required_income > 0
-    assert result.status != ReadinessStatus.INSUFFICIENT
+    assert result.target_status == ReadinessStatus.SUFFICIENT
+    assert result.status == ReadinessStatus.SUFFICIENT
 
     improved = simulate_retirement(
         current_age=60,
@@ -182,9 +215,9 @@ def test_recommend_retirement_saving_and_income_when_cap_alone_insufficient():
         asset=5_000,
         gender="female",
     )
-    assert improved.status != ReadinessStatus.INSUFFICIENT
+    assert improved.status == ReadinessStatus.SUFFICIENT
 
-    # required_income이 최소값에 가까운지: 조금 덜 벌면 여전히 부족해야 함
+    # required_income이 최소값에 가까운지: 조금 덜 벌면 여전히 SUFFICIENT에 못 미쳐야 함
     under_income = simulate_retirement(
         current_age=60,
         monthly_expenses=monthly_expenses - result.required_saving,
@@ -192,7 +225,7 @@ def test_recommend_retirement_saving_and_income_when_cap_alone_insufficient():
         asset=5_000,
         gender="female",
     )
-    assert under_income.status == ReadinessStatus.INSUFFICIENT
+    assert under_income.status != ReadinessStatus.SUFFICIENT
 
 
 def test_simulate_pension_reduction_no_reduction_at_exact_threshold():
@@ -284,6 +317,8 @@ def test_simulate_scenarios_produces_distinct_results_per_scenario():
         monthly_pension=150,
         asset=10_000,
         gender="male",
+        base_monthly_income=300,
+        total_service_years=25,
     )
 
     assert {outcome.scenario_type for outcome in result.scenarios} == {
@@ -311,6 +346,8 @@ def test_simulate_scenarios_selects_scenario_with_max_depletion_age_as_best():
         monthly_pension=150,
         asset=10_000,
         gender="male",
+        base_monthly_income=300,
+        total_service_years=25,
     )
 
     best_outcome = max(result.scenarios, key=lambda outcome: (outcome.depletion_age, outcome.total_received))
@@ -324,6 +361,8 @@ def test_simulate_scenarios_timeline_matches_diagnosis_core_format():
         monthly_pension=150,
         asset=10_000,
         gender="male",
+        base_monthly_income=300,
+        total_service_years=25,
     )
 
     baseline = simulate_retirement(
@@ -341,9 +380,226 @@ def test_simulate_scenarios_timeline_matches_diagnosis_core_format():
 
 def test_select_best_scenario_breaks_tie_by_total_received():
     outcomes = [
-        ScenarioOutcome(scenario_type=ScenarioType.NORMAL, depletion_age=80, total_received=1000.0, timeline=[]),
-        ScenarioOutcome(scenario_type=ScenarioType.EARLY, depletion_age=80, total_received=1500.0, timeline=[]),
-        ScenarioOutcome(scenario_type=ScenarioType.LUMP_SUM, depletion_age=75, total_received=9999.0, timeline=[]),
+        ScenarioOutcome(
+            scenario_type=ScenarioType.NORMAL, depletion_age=80, total_received=1000.0,
+            break_even_age=None, timeline=[],
+        ),
+        ScenarioOutcome(
+            scenario_type=ScenarioType.EARLY, depletion_age=80, total_received=1500.0,
+            break_even_age=None, timeline=[],
+        ),
+        ScenarioOutcome(
+            scenario_type=ScenarioType.LUMP_SUM, depletion_age=75, total_received=9999.0,
+            break_even_age=70, timeline=[],
+        ),
     ]
 
     assert retirement_service._select_best_scenario(outcomes) == ScenarioType.EARLY
+
+
+def test_simulate_scenarios_break_even_age_is_none_for_normal():
+    result = simulate_scenarios(
+        current_age=60,
+        monthly_expenses=250,
+        monthly_pension=150,
+        asset=10_000,
+        gender="male",
+        base_monthly_income=300,
+        total_service_years=25,
+    )
+
+    normal_outcome = next(o for o in result.scenarios if o.scenario_type == ScenarioType.NORMAL)
+    assert normal_outcome.break_even_age is None
+
+
+def test_simulate_scenarios_lump_sum_break_even_age_is_consistent_with_cumulative_totals():
+    result = simulate_scenarios(
+        current_age=60,
+        monthly_expenses=250,
+        monthly_pension=150,
+        asset=10_000,
+        gender="male",
+        base_monthly_income=300,
+        total_service_years=25,
+    )
+
+    normal_outcome = next(o for o in result.scenarios if o.scenario_type == ScenarioType.NORMAL)
+    lump_sum_outcome = next(o for o in result.scenarios if o.scenario_type == ScenarioType.LUMP_SUM)
+
+    assert lump_sum_outcome.break_even_age is not None
+
+    # LUMP_SUM은 초기 자산이 더 크므로(업프론트 일시금), 그 차액을 업프론트 수령액으로 취급한다.
+    upfront = lump_sum_outcome.timeline[0].asset - normal_outcome.timeline[0].asset
+
+    # break_even_age 이전에는 LUMP_SUM 누적 수령액이 NORMAL보다 많아야 하고,
+    # break_even_age 시점에는 NORMAL이 LUMP_SUM을 따라잡아야 한다.
+    normal_running = 0.0
+    lump_running = upfront
+    for n_point, l_point in zip(normal_outcome.timeline, lump_sum_outcome.timeline):
+        normal_running += n_point.income
+        lump_running += l_point.income
+        if n_point.age < lump_sum_outcome.break_even_age:
+            assert normal_running < lump_running
+        elif n_point.age == lump_sum_outcome.break_even_age:
+            assert normal_running >= lump_running
+            break
+
+
+def test_simulate_scenarios_early_years_out_of_range_raises():
+    with pytest.raises(ValueError):
+        simulate_scenarios(
+            current_age=60,
+            monthly_expenses=250,
+            monthly_pension=150,
+            asset=10_000,
+            gender="male",
+            base_monthly_income=300,
+            total_service_years=25,
+            early_years=6,
+        )
+
+    with pytest.raises(ValueError):
+        simulate_scenarios(
+            current_age=60,
+            monthly_expenses=250,
+            monthly_pension=150,
+            asset=10_000,
+            gender="male",
+            base_monthly_income=300,
+            total_service_years=25,
+            early_years=0,
+        )
+
+
+def test_simulate_scenarios_early_reduction_matches_per_year_rate():
+    monthly_pension = 150
+    result = simulate_scenarios(
+        current_age=60,
+        monthly_expenses=250,
+        monthly_pension=monthly_pension,
+        asset=10_000,
+        gender="male",
+        base_monthly_income=300,
+        total_service_years=25,
+        early_years=2,
+    )
+
+    early_outcome = next(o for o in result.scenarios if o.scenario_type == ScenarioType.EARLY)
+    expected_monthly_income = monthly_pension * (1 - EARLY_REDUCTION_RATE_PER_YEAR * 2) * 12
+    assert early_outcome.timeline[0].income == pytest.approx(expected_monthly_income)
+
+
+def test_calculate_lump_sum_and_pension_matches_manual_example():
+    # 수기 계산 예시: 기준소득월액 300만원, 공제 13년, 총재직연수 30년
+    # 공제일시금 = 300 x 13 x (0.975 + 0.0065 x 13) = 300 x 13 x 1.0595 = 4132.05
+    # 연금 선택 연수 = 30 - 13 = 17년 -> 월연금 = 300 x 17 x 0.017 = 86.7
+    lump_sum, monthly_pension = _calculate_lump_sum_and_pension(
+        base_monthly_income=300,
+        total_service_years=30,
+        deduction_years=13,
+    )
+
+    assert lump_sum == pytest.approx(4132.05)
+    assert monthly_pension == pytest.approx(86.7)
+
+
+def test_calculate_lump_sum_and_pension_full_deduction_matches_lump_sum_only():
+    # 공제연수 == 총재직연수(전액 공제)이면 LUMP_SUM과 동일: 연금 선택 연수 0, 월연금 0
+    lump_sum, monthly_pension = _calculate_lump_sum_and_pension(
+        base_monthly_income=300,
+        total_service_years=25,
+        deduction_years=25,
+    )
+
+    assert monthly_pension == 0.0
+    assert lump_sum == pytest.approx(300 * 25 * (0.975 + 0.0065 * 25))
+
+
+def test_resolve_split_deduction_years_clamps_to_max_allowed_when_omitted():
+    # total_service_years=25 -> max(25-10, ...) = 15, MAX_DEDUCTION_YEARS=26이므로 15로 클램프
+    assert _resolve_split_deduction_years(total_service_years=25, deduction_years=None) == 15
+
+
+def test_resolve_split_deduction_years_clamps_to_cap_when_service_years_large():
+    # total_service_years=40 -> 40-10=30 > MAX_DEDUCTION_YEARS(26) -> 26으로 클램프
+    assert _resolve_split_deduction_years(total_service_years=40, deduction_years=None) == MAX_DEDUCTION_YEARS
+
+
+def test_resolve_split_deduction_years_raises_when_service_years_below_minimum():
+    with pytest.raises(ValueError):
+        _resolve_split_deduction_years(total_service_years=MIN_PENSION_YEARS - 1, deduction_years=None)
+
+
+def test_resolve_split_deduction_years_raises_when_explicit_value_violates_pension_minimum():
+    # total_service_years=25, deduction_years=20 -> 연금 선택 연수 5년 < MIN_PENSION_YEARS(10)
+    with pytest.raises(ValueError):
+        _resolve_split_deduction_years(total_service_years=25, deduction_years=20)
+
+
+def test_resolve_split_deduction_years_raises_when_explicit_value_exceeds_max():
+    with pytest.raises(ValueError):
+        _resolve_split_deduction_years(total_service_years=40, deduction_years=MAX_DEDUCTION_YEARS + 1)
+
+
+def test_simulate_scenarios_raises_400_when_total_service_years_below_pension_minimum():
+    with pytest.raises(ValueError):
+        simulate_scenarios(
+            current_age=60,
+            monthly_expenses=250,
+            monthly_pension=150,
+            asset=10_000,
+            gender="male",
+            base_monthly_income=300,
+            total_service_years=5,
+        )
+
+
+def test_simulate_scenarios_raises_when_explicit_deduction_years_violates_constraints():
+    with pytest.raises(ValueError):
+        simulate_scenarios(
+            current_age=60,
+            monthly_expenses=250,
+            monthly_pension=150,
+            asset=10_000,
+            gender="male",
+            base_monthly_income=300,
+            total_service_years=25,
+            deduction_years=20,
+        )
+
+
+def test_simulate_scenarios_lump_sum_and_installment_use_unified_formula():
+    total_service_years = 25
+    base_monthly_income = 300
+    deduction_years = 15
+
+    result = simulate_scenarios(
+        current_age=60,
+        monthly_expenses=250,
+        monthly_pension=150,
+        asset=10_000,
+        gender="male",
+        base_monthly_income=base_monthly_income,
+        total_service_years=total_service_years,
+        deduction_years=deduction_years,
+    )
+
+    expected_full_lump_sum, expected_full_pension = _calculate_lump_sum_and_pension(
+        base_monthly_income, total_service_years, total_service_years
+    )
+    expected_split_lump_sum, expected_split_pension = _calculate_lump_sum_and_pension(
+        base_monthly_income, total_service_years, deduction_years
+    )
+
+    lump_sum_outcome = next(o for o in result.scenarios if o.scenario_type == ScenarioType.LUMP_SUM)
+    installment_outcome = next(o for o in result.scenarios if o.scenario_type == ScenarioType.INSTALLMENT)
+
+    assert expected_full_pension == 0.0
+
+    upfront_lump = lump_sum_outcome.timeline[0].asset - 10_000
+    assert upfront_lump == pytest.approx(expected_full_lump_sum)
+    assert lump_sum_outcome.timeline[0].income == pytest.approx(expected_full_pension * 12)
+
+    upfront_installment = installment_outcome.timeline[0].asset - 10_000
+    assert upfront_installment == pytest.approx(expected_split_lump_sum)
+    assert installment_outcome.timeline[0].income == pytest.approx(expected_split_pension * 12)
