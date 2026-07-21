@@ -6,9 +6,16 @@ from app.schemas.retirement import (
     RecommendationResult,
     ReductionRequest,
     ReductionResult,
+    ScenariosRequest,
+    ScenariosResult,
     SimulationResult,
 )
-from app.services.retirement_service import diagnose_core, recommend_retirement, simulate_pension_reduction
+from app.services.retirement_service import (
+    diagnose_core,
+    recommend_retirement,
+    simulate_pension_reduction,
+    simulate_scenarios,
+)
 
 router = APIRouter(prefix="/api/retirement", tags=["retirement"])
 
@@ -67,6 +74,25 @@ def reduction(req: ReductionRequest) -> ReductionResult:
             gender=req.gender,
             reemployment_income=req.reemployment_income,
             year=req.year,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+
+@router.post(
+    "/scenarios",
+    response_model=ScenariosResult,
+    summary="연금 수령방식 시나리오 비교",
+    description="정상/조기/일시금/분할 4가지 연금 수령방식별 고갈 나이와 총 수령액을 비교하고 최적 방식을 추천",
+)
+def scenarios(req: ScenariosRequest) -> ScenariosResult:
+    try:
+        return simulate_scenarios(
+            current_age=req.current_age,
+            monthly_expenses=req.monthly_expenses,
+            monthly_pension=req.monthly_pension,
+            asset=req.asset,
+            gender=req.gender,
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))

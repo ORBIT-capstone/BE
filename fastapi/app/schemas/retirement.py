@@ -77,3 +77,29 @@ class ReductionResult(BaseModel):
     target_age: int  # 목표연령
     status: ReadinessStatus  # 감액 반영 후 노후 준비 상태
     timeline: list[TimelinePoint]  # 감액 반영 후 연도별 자산 추이
+
+
+class ScenariosRequest(DiagnosisRequest):
+    """진단(diagnosis)과 동일한 입력 스키마를 재사용"""
+
+
+class ScenarioType(str, Enum):
+    """연금 수령방식"""
+
+    NORMAL = "NORMAL"  # 정상수령
+    EARLY = "EARLY"  # 조기수령 (감액)
+    LUMP_SUM = "LUMP_SUM"  # 일시금수령
+    INSTALLMENT = "INSTALLMENT"  # 분할수령 (일시금 + 월연금 혼합)
+
+
+class ScenarioOutcome(BaseModel):
+    scenario_type: ScenarioType  # 수령방식
+    depletion_age: int  # 자산 고갈 나이 (고갈되지 않으면 MAX_AGE)
+    total_received: float  # 총 수령액 (만원)
+    timeline: list[TimelinePoint]  # 연도별 자산 추이
+
+
+class ScenariosResult(BaseModel):
+    current_age: int  # 현재 나이
+    scenarios: list[ScenarioOutcome]  # 수령방식별 결과
+    best_scenario: ScenarioType  # 최적 수령방식
