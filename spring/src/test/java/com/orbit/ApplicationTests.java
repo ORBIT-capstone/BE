@@ -1,6 +1,6 @@
 package com.orbit;
 
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -35,17 +35,16 @@ class ApplicationTests {
 	}
 
 	@Test
-	void updateMeWithInvalidEmploymentStatusReturnsBadRequest() throws Exception {
+	void getMeDoesNotReturnEmploymentStatus() throws Exception {
 		mockMvc.perform(post("/api/users/signup")
 				.contentType(MediaType.APPLICATION_JSON)
 				.content("""
 					{
 					  "email": "profile-test@example.com",
 					  "password": "password123",
-					  "name": "홍길동",
+					  "name": "Hong Gil-dong",
 					  "birthDate": "1995-01-01",
-					  "gender": "MALE",
-					  "employmentStatus": "employees"
+					  "gender": "MALE"
 					}
 					"""))
 			.andExpect(status().isCreated());
@@ -67,19 +66,10 @@ class ApplicationTests {
 			.get("accessToken")
 			.asText();
 
-		mockMvc.perform(patch("/api/users/me")
-				.header("Authorization", "Bearer " + accessToken)
-				.contentType(MediaType.APPLICATION_JSON)
-				.content("""
-					{
-					  "name": "Hong Gil-dong",
-					  "birthDate": "1995-01-01",
-					  "gender": "MALE",
-					  "employmentStatus": "retire"
-					}
-					"""))
-			.andExpect(status().isBadRequest())
-			.andExpect(jsonPath("$.code").value("INVALID_REQUEST"))
-			.andExpect(jsonPath("$.message").value("employmentStatus는 employees 또는 retirees 중 하나여야 합니다."));
+		mockMvc.perform(get("/api/users/me")
+				.header("Authorization", "Bearer " + accessToken))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.email").value("profile-test@example.com"))
+			.andExpect(jsonPath("$.employmentStatus").doesNotExist());
 	}
 }

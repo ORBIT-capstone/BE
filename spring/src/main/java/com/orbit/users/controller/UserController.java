@@ -38,7 +38,7 @@ public class UserController {
 	private final AuthService authService;
 
 	@PostMapping("/signup")
-	@Operation(summary = "회원가입", description = "이메일, 비밀번호, 이름, 생년월일, 성별, 재직 상태로 회원가입합니다.")
+	@Operation(summary = "회원가입", description = "이메일, 비밀번호, 이름, 생년월일, 성별로 회원가입합니다.")
 	public ResponseEntity<SignupResponse> signup(@Valid @RequestBody SignupRequest request) {
 		userService.signup(request);
 		return ResponseEntity.status(HttpStatus.CREATED)
@@ -63,7 +63,7 @@ public class UserController {
 
 	@PatchMapping("/me")
 	@SecurityRequirement(name = "bearerAuth")
-	@Operation(summary = "회원 정보 수정", description = "현재 로그인한 회원의 이름, 생년월일, 성별, 재직 상태를 수정합니다.")
+	@Operation(summary = "회원 정보 수정", description = "현재 로그인한 회원의 이름, 생년월일, 성별을 수정합니다.")
 	public ResponseEntity<UserResponse> updateMe(
 		@Parameter(hidden = true) @RequestHeader(value = "Authorization", required = false) String authorizationHeader,
 		@Valid @RequestBody UpdateUserRequest request
