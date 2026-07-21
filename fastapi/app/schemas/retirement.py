@@ -58,3 +58,22 @@ class RecommendationResult(BaseModel):
     target_age: int  # 목표연령
     status: ReadinessStatus  # 개선 적용 후 노후 준비 상태
     timeline: list[TimelinePoint]  # 개선 적용 후 연도별 자산 추이
+
+
+class ReductionRequest(DiagnosisRequest):
+    """진단(diagnosis)과 동일한 입력 스키마를 재사용하고 재취업 관련 필드를 추가"""
+
+    reemployment_income: float  # 재취업 예상 월소득 (만원)
+    year: int | None = None  # 소득심사 기준 연도 (미지정 시 최신 규칙 적용)
+
+
+class ReductionResult(BaseModel):
+    current_age: int  # 현재 나이
+    reemployment_income: float  # 재취업 예상 월소득 (만원)
+    monthly_reduction: float  # 월 감액액 (만원)
+    reduced_monthly_pension: float  # 감액 후 월 실수령 연금액 (만원)
+    full_payment_income_threshold: float  # 전액 수령 가능 소득 상한 (만원)
+    depletion_age: int | None  # 감액 반영 후 자산 고갈 나이
+    target_age: int  # 목표연령
+    status: ReadinessStatus  # 감액 반영 후 노후 준비 상태
+    timeline: list[TimelinePoint]  # 감액 반영 후 연도별 자산 추이

@@ -4,9 +4,11 @@ from app.schemas.retirement import (
     ReadinessStatus,
     RecommendationResult,
     RecommendationType,
+    ReductionResult,
     SimulationResult,
     TimelinePoint,
 )
+from app.services.reduction_rules import calculate_bracket_reduction, get_reduction_rule
 
 INVESTMENT_RETURN = 0.03  # 자산 운용 수익률
 INFLATION_RATE = 0.02  # 물가상승률 (지출/Gap 증가율)
@@ -16,6 +18,7 @@ TARGET_AGE_MALE = 84  # 남성 목표연령 (통계청 생명표 60세 기대여
 TARGET_AGE_FEMALE = 88  # 여성 목표연령 (통계청 생명표 60세 기대여명 기준)
 SAVING_CAP_RATIO = 0.3  # 절약 상한 비율 (월 생활비 대비)
 SEARCH_PRECISION = 0.01  # 이진탐색 종료 정밀도 (만원)
+MAX_REDUCTION_RATIO = 0.5  # 감액 상한 비율 (노령연금액의 1/2 초과 감액 불가)
 
 
 def get_target_age(gender: str) -> int:
@@ -209,4 +212,48 @@ def recommend_retirement(
         target_age=improved.target_age,
         status=improved.status,
         timeline=improved.timeline,
+    )
+
+
+def simulate_pension_reduction(
+    current_age: int,
+    monthly_expenses: float,
+    monthly_pension: float,
+    asset: float,
+    gender: str,
+    reemployment_income: float,
+    year: int | None = None,
+) -> ReductionResult:
+    """재취업 예상 월소득에 따른 국민연금 소득심사 감액을 계산하고,
+    감액된 연금으로 diagnose_core()를 통해 timeline을 재계산한다.
+    자산 시뮬레이션 로직은 diagnose_core()에 전적으로 위임하며, 여기서는
+    감액 산식(reduction_rules)만 계산한다.
+    """
+    if reemployment_income < 0:
+        raise ValueError("reemployment_income은 0 이상이어야 합니다.")
+
+    rule = get_reduction_rule(year)
+    excess_income = max(0.0, reemployment_income - rule.threshold)
+    raw_reduction = calculate_bracket_reduction(excess_income, rule.rate_brackets)
+    monthly_reduction = min(raw_reduction, monthly_pension * MAX_REDUCTION_RATIO)
+    reduced_monthly_pension = monthly_pension - monthly_reduction
+
+    result = diagnose_core(
+        current_age=current_age,
+        monthly_expenses=monthly_expenses,
+        monthly_pension=reduced_monthly_pension,
+        asset=asset,
+        gender=gender,
+    )
+
+    return ReductionResult(
+        current_age=current_age,
+        reemployment_income=reemployment_income,
+        monthly_reduction=round(monthly_reduction, 2),
+        reduced_monthly_pension=round(reduced_monthly_pension, 2),
+        full_payment_income_threshold=rule.threshold,
+        depletion_age=result.depletion_age,
+        target_age=result.target_age,
+        status=result.status,
+        timeline=result.timeline,
     )

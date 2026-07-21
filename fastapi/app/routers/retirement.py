@@ -4,9 +4,11 @@ from app.schemas.retirement import (
     DiagnosisRequest,
     RecommendationRequest,
     RecommendationResult,
+    ReductionRequest,
+    ReductionResult,
     SimulationResult,
 )
-from app.services.retirement_service import diagnose_core, recommend_retirement
+from app.services.retirement_service import diagnose_core, recommend_retirement, simulate_pension_reduction
 
 router = APIRouter(prefix="/api/retirement", tags=["retirement"])
 
@@ -44,6 +46,27 @@ def recommend(req: RecommendationRequest) -> RecommendationResult:
             monthly_pension=req.monthly_pension,
             asset=req.asset,
             gender=req.gender,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+
+@router.post(
+    "/reduction",
+    response_model=ReductionResult,
+    summary="재취업 소득에 따른 연금 감액 계산",
+    description="재취업 예상 월소득에 소득심사 감액 규칙을 적용해 월 감액액과 감액 반영 timeline을 계산",
+)
+def reduction(req: ReductionRequest) -> ReductionResult:
+    try:
+        return simulate_pension_reduction(
+            current_age=req.current_age,
+            monthly_expenses=req.monthly_expenses,
+            monthly_pension=req.monthly_pension,
+            asset=req.asset,
+            gender=req.gender,
+            reemployment_income=req.reemployment_income,
+            year=req.year,
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
