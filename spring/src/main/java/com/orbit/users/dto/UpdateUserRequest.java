@@ -1,6 +1,5 @@
 package com.orbit.users.dto;
 
-import com.orbit.users.domain.EmploymentStatus;
 import com.orbit.users.domain.Gender;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.Past;
@@ -20,9 +19,6 @@ public record UpdateUserRequest(
 	LocalDate birthDate,
 
 	@Schema(description = "성별", example = "MALE", allowableValues = {"MALE", "FEMALE"}, nullable = true)
-	Gender gender,
-
-	@Schema(description = "재직 상태", example = "employees", allowableValues = {"employees", "retirees"}, nullable = true)
-	EmploymentStatus employmentStatus
+	Gender gender
 ) {
 }
