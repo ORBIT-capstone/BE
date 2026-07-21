@@ -1,6 +1,5 @@
 package com.orbit.users.dto;
 
-import com.orbit.users.domain.EmploymentStatus;
 import com.orbit.users.domain.Gender;
 import com.orbit.users.domain.User;
 import io.swagger.v3.oas.annotations.media.Schema;
@@ -18,10 +17,7 @@ public record UserResponse(
 	LocalDate birthDate,
 
 	@Schema(description = "성별", example = "MALE", allowableValues = {"MALE", "FEMALE"})
-	Gender gender,
-
-	@Schema(description = "재직 상태", example = "employees", allowableValues = {"employees", "retirees"})
-	EmploymentStatus employmentStatus
+	Gender gender
 ) {
 
 	public static UserResponse from(User user) {
@@ -29,8 +25,7 @@ public record UserResponse(
 			user.getEmail(),
 			user.getName(),
 			user.getBirthDate(),
-			user.getGender(),
-			user.getEmploymentStatus()
+			user.getGender()
 		);
 	}
 }

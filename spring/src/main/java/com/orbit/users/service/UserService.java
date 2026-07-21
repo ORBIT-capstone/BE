@@ -30,7 +30,6 @@ public class UserService {
 			.name(request.name())
 			.birthDate(request.birthDate())
 			.gender(request.gender())
-			.employmentStatus(request.employmentStatus())
 			.build();
 
 		userRepository.save(user);
@@ -49,8 +48,7 @@ public class UserService {
 		user.updateProfile(
 			request.name(),
 			request.birthDate(),
-			request.gender(),
-			request.employmentStatus()
+			request.gender()
 		);
 
 		return user;
