@@ -1,13 +1,15 @@
 import pytest
 
-from app.schemas.retirement import ReadinessStatus
+from app.schemas.retirement import ReadinessStatus, RecommendationType
 from app.services import retirement_service
 from app.services.retirement_service import (
     MAX_AGE,
+    SAVING_CAP_RATIO,
     TARGET_AGE_FEMALE,
     TARGET_AGE_MALE,
     calculate_status,
     get_target_age,
+    recommend_retirement,
     simulate_retirement,
 )
 
@@ -101,3 +103,89 @@ def test_simulate_retirement_depletion_age_capped_at_max_age():
     )
 
     assert result.depletion_age == MAX_AGE
+
+
+def test_recommend_retirement_sufficient_when_baseline_already_sufficient():
+    result = recommend_retirement(
+        current_age=65,
+        monthly_expenses=150,
+        monthly_pension=200,
+        asset=10_000,
+        gender="male",
+    )
+
+    assert result.recommendation_type == RecommendationType.SUFFICIENT
+    assert result.required_saving == 0.0
+    assert result.required_income == 0.0
+    assert result.status == ReadinessStatus.SUFFICIENT
+
+
+def test_recommend_retirement_saving_only_within_cap():
+    monthly_expenses = 250
+    result = recommend_retirement(
+        current_age=60,
+        monthly_expenses=monthly_expenses,
+        monthly_pension=200,
+        asset=15_000,
+        gender="male",
+    )
+
+    assert result.recommendation_type == RecommendationType.SAVING_ONLY
+    assert result.required_income == 0.0
+    assert 0 < result.required_saving <= monthly_expenses * SAVING_CAP_RATIO
+    assert result.status != ReadinessStatus.INSUFFICIENT
+
+    # 개선안(절약 적용) 시뮬레이션이 실제로 목표연령 이상까지 자산을 유지시키는지 검증
+    improved = simulate_retirement(
+        current_age=60,
+        monthly_expenses=monthly_expenses - result.required_saving,
+        monthly_pension=200,
+        asset=15_000,
+        gender="male",
+    )
+    assert improved.status != ReadinessStatus.INSUFFICIENT
+
+    # required_saving이 최소값에 가까운지: 조금 덜 절약하면 여전히 부족해야 함
+    under_saving = simulate_retirement(
+        current_age=60,
+        monthly_expenses=monthly_expenses - (result.required_saving - 1.0),
+        monthly_pension=200,
+        asset=15_000,
+        gender="male",
+    )
+    assert under_saving.status == ReadinessStatus.INSUFFICIENT
+
+
+def test_recommend_retirement_saving_and_income_when_cap_alone_insufficient():
+    monthly_expenses = 400
+    result = recommend_retirement(
+        current_age=60,
+        monthly_expenses=monthly_expenses,
+        monthly_pension=100,
+        asset=5_000,
+        gender="female",
+    )
+
+    assert result.recommendation_type == RecommendationType.SAVING_AND_INCOME
+    assert result.required_saving == pytest.approx(monthly_expenses * SAVING_CAP_RATIO)
+    assert result.required_income > 0
+    assert result.status != ReadinessStatus.INSUFFICIENT
+
+    improved = simulate_retirement(
+        current_age=60,
+        monthly_expenses=monthly_expenses - result.required_saving,
+        monthly_pension=100 + result.required_income,
+        asset=5_000,
+        gender="female",
+    )
+    assert improved.status != ReadinessStatus.INSUFFICIENT
+
+    # required_income이 최소값에 가까운지: 조금 덜 벌면 여전히 부족해야 함
+    under_income = simulate_retirement(
+        current_age=60,
+        monthly_expenses=monthly_expenses - result.required_saving,
+        monthly_pension=100 + (result.required_income - 1.0),
+        asset=5_000,
+        gender="female",
+    )
+    assert under_income.status == ReadinessStatus.INSUFFICIENT
