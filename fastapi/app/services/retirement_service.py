@@ -1,4 +1,12 @@
-from app.schemas.retirement import ReadinessStatus, SimulationResult, TimelinePoint
+import math
+
+from app.schemas.retirement import (
+    ReadinessStatus,
+    RecommendationResult,
+    RecommendationType,
+    SimulationResult,
+    TimelinePoint,
+)
 
 INVESTMENT_RETURN = 0.03  # 자산 운용 수익률
 INFLATION_RATE = 0.02  # 물가상승률 (지출/Gap 증가율)
@@ -6,6 +14,8 @@ PENSION_GROWTH_RATE = 0.0  # 연금 소득 증가율
 MAX_AGE = 100  # 시뮬레이션 상한 나이
 TARGET_AGE_MALE = 84  # 남성 목표연령 (통계청 생명표 60세 기대여명 기준)
 TARGET_AGE_FEMALE = 88  # 여성 목표연령 (통계청 생명표 60세 기대여명 기준)
+SAVING_CAP_RATIO = 0.3  # 절약 상한 비율 (월 생활비 대비)
+SEARCH_PRECISION = 0.01  # 이진탐색 종료 정밀도 (만원)
 
 
 def get_target_age(gender: str) -> int:
@@ -31,7 +41,9 @@ def simulate_retirement(
     asset: float,
     gender: str,
 ) -> SimulationResult:
-    """현재 나이부터 MAX_AGE까지 매년 자산 변화를 시뮬레이션"""
+    """현재 나이부터 MAX_AGE까지 매년 자산 변화를 시뮬레이션하는 공용 계산 코어.
+    diagnosis/recommendations API는 모두 이 함수(별칭 diagnose_core)를 통해서만 시뮬레이션을 수행한다.
+    """
     if monthly_expenses <= 0:
         raise ValueError("monthly_expenses는 0보다 커야 합니다.")
 
@@ -81,4 +93,120 @@ def simulate_retirement(
         target_age=target_age,
         status=status,
         timeline=timeline,
+    )
+
+
+diagnose_core = simulate_retirement  # diagnosis/recommendations 공용 코어에 대한 별칭
+
+
+def _binary_search_min(
+    condition,
+    low: float,
+    high: float,
+    precision: float = SEARCH_PRECISION,
+) -> float:
+    """[low, high] 구간에서 condition(x)가 True인 최소 x를 이진탐색으로 반환.
+    condition은 x에 대해 단조(False->True)이며 condition(high)는 True여야 한다.
+    """
+    while high - low > precision:
+        mid = (low + high) / 2
+        if condition(mid):
+            high = mid
+        else:
+            low = mid
+    return high
+
+
+def _expand_upper_bound(condition, seed: float, max_doublings: int = 60) -> float:
+    """condition이 True가 될 때까지 상한을 2배씩 늘려가며 이진탐색용 구간을 확보"""
+    high = max(seed, 1.0)
+    for _ in range(max_doublings):
+        if condition(high):
+            return high
+        high *= 2
+    raise ValueError("추가 소득 필요액을 찾을 수 없습니다.")
+
+
+def _round_up(value: float, decimals: int = 2) -> float:
+    """이진탐색으로 찾은 최소값을 내림 없이 올림하여, 반올림으로 인해
+    목표연령 도달 조건을 다시 벗어나지 않도록 보장한다."""
+    factor = 10**decimals
+    return math.ceil(value * factor) / factor
+
+
+def recommend_retirement(
+    current_age: int,
+    monthly_expenses: float,
+    monthly_pension: float,
+    asset: float,
+    gender: str,
+) -> RecommendationResult:
+    """MIDDLE/INSUFFICIENT 진단 시 목표연령 도달에 필요한 최소 절약액/추가소득액을 계산.
+
+    판정 캐스케이드:
+      1) 생활비를 SAVING_CAP_RATIO 한도 내에서 절약하는 것만으로 목표연령에 도달하는지 확인
+      2) 절약 상한까지 적용해도 부족하면, 절약 상한을 고정한 채 추가로 필요한 최소 월 소득을 탐색
+    모든 시뮬레이션은 diagnose_core()에 위임하며 별도의 자산 계산 로직을 두지 않는다.
+    """
+    baseline = diagnose_core(
+        current_age=current_age,
+        monthly_expenses=monthly_expenses,
+        monthly_pension=monthly_pension,
+        asset=asset,
+        gender=gender,
+    )
+
+    if baseline.status == ReadinessStatus.SUFFICIENT:
+        return RecommendationResult(
+            current_age=current_age,
+            recommendation_type=RecommendationType.SUFFICIENT,
+            required_saving=0.0,
+            required_income=0.0,
+            depletion_age=baseline.depletion_age,
+            target_age=baseline.target_age,
+            status=baseline.status,
+            timeline=baseline.timeline,
+        )
+
+    def reaches_target(saving: float, extra_income: float) -> bool:
+        result = diagnose_core(
+            current_age=current_age,
+            monthly_expenses=monthly_expenses - saving,
+            monthly_pension=monthly_pension + extra_income,
+            asset=asset,
+            gender=gender,
+        )
+        return result.status != ReadinessStatus.INSUFFICIENT
+
+    saving_cap = monthly_expenses * SAVING_CAP_RATIO
+
+    if reaches_target(saving_cap, 0.0):
+        required_saving = _round_up(_binary_search_min(lambda s: reaches_target(s, 0.0), 0.0, saving_cap))
+        required_income = 0.0
+        recommendation_type = RecommendationType.SAVING_ONLY
+    else:
+        required_saving = _round_up(saving_cap)
+        upper = _expand_upper_bound(lambda y: reaches_target(saving_cap, y), monthly_expenses)
+        required_income = _round_up(_binary_search_min(lambda y: reaches_target(saving_cap, y), 0.0, upper))
+        recommendation_type = RecommendationType.SAVING_AND_INCOME
+
+    # 보고되는 required_saving/required_income(올림 처리된 값)로 다시 시뮬레이션하여
+    # 응답의 timeline/status가 실제 추천값과 항상 일치하도록 보장한다.
+    improved = diagnose_core(
+        current_age=current_age,
+        monthly_expenses=monthly_expenses - required_saving,
+        monthly_pension=monthly_pension + required_income,
+        asset=asset,
+        gender=gender,
+    )
+
+    return RecommendationResult(
+        current_age=current_age,
+        recommendation_type=recommendation_type,
+        required_saving=required_saving,
+        required_income=required_income,
+        depletion_age=improved.depletion_age,
+        target_age=improved.target_age,
+        status=improved.status,
+        timeline=improved.timeline,
     )
