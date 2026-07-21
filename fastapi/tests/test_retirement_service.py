@@ -1,6 +1,6 @@
 import pytest
 
-from app.schemas.retirement import ReadinessStatus, RecommendationType
+from app.schemas.retirement import ReadinessStatus, RecommendationType, ScenarioOutcome, ScenarioType
 from app.services import retirement_service
 from app.services.reduction_rules import get_reduction_rule
 from app.services.retirement_service import (
@@ -14,6 +14,7 @@ from app.services.retirement_service import (
     recommend_retirement,
     simulate_pension_reduction,
     simulate_retirement,
+    simulate_scenarios,
 )
 
 
@@ -274,3 +275,75 @@ def test_simulate_pension_reduction_raises_for_negative_income():
             gender="male",
             reemployment_income=-1,
         )
+
+
+def test_simulate_scenarios_produces_distinct_results_per_scenario():
+    result = simulate_scenarios(
+        current_age=60,
+        monthly_expenses=250,
+        monthly_pension=150,
+        asset=10_000,
+        gender="male",
+    )
+
+    assert {outcome.scenario_type for outcome in result.scenarios} == {
+        ScenarioType.NORMAL,
+        ScenarioType.EARLY,
+        ScenarioType.LUMP_SUM,
+        ScenarioType.INSTALLMENT,
+    }
+
+    depletion_ages = {outcome.scenario_type: outcome.depletion_age for outcome in result.scenarios}
+    total_received = {outcome.scenario_type: outcome.total_received for outcome in result.scenarios}
+
+    # 4가지 방식은 서로 다른 monthly_pension/asset 조합을 사용하므로 결과가 달라야 한다
+    assert len(set(depletion_ages.values())) > 1
+    assert len(set(total_received.values())) == len(total_received)
+
+    # 조기수령은 정상수령보다 월 수령액이 적으므로 총 수령액도 더 적어야 한다
+    assert total_received[ScenarioType.EARLY] < total_received[ScenarioType.NORMAL]
+
+
+def test_simulate_scenarios_selects_scenario_with_max_depletion_age_as_best():
+    result = simulate_scenarios(
+        current_age=60,
+        monthly_expenses=250,
+        monthly_pension=150,
+        asset=10_000,
+        gender="male",
+    )
+
+    best_outcome = max(result.scenarios, key=lambda outcome: (outcome.depletion_age, outcome.total_received))
+    assert result.best_scenario == best_outcome.scenario_type
+
+
+def test_simulate_scenarios_timeline_matches_diagnosis_core_format():
+    result = simulate_scenarios(
+        current_age=60,
+        monthly_expenses=250,
+        monthly_pension=150,
+        asset=10_000,
+        gender="male",
+    )
+
+    baseline = simulate_retirement(
+        current_age=60,
+        monthly_expenses=250,
+        monthly_pension=150,
+        asset=10_000,
+        gender="male",
+    )
+
+    normal_outcome = next(o for o in result.scenarios if o.scenario_type == ScenarioType.NORMAL)
+    assert normal_outcome.timeline == baseline.timeline
+    assert normal_outcome.depletion_age == baseline.depletion_age
+
+
+def test_select_best_scenario_breaks_tie_by_total_received():
+    outcomes = [
+        ScenarioOutcome(scenario_type=ScenarioType.NORMAL, depletion_age=80, total_received=1000.0, timeline=[]),
+        ScenarioOutcome(scenario_type=ScenarioType.EARLY, depletion_age=80, total_received=1500.0, timeline=[]),
+        ScenarioOutcome(scenario_type=ScenarioType.LUMP_SUM, depletion_age=75, total_received=9999.0, timeline=[]),
+    ]
+
+    assert retirement_service._select_best_scenario(outcomes) == ScenarioType.EARLY

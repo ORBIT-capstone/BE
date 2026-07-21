@@ -5,9 +5,13 @@ from app.schemas.retirement import (
     RecommendationResult,
     RecommendationType,
     ReductionResult,
+    ScenarioOutcome,
+    ScenariosResult,
+    ScenarioType,
     SimulationResult,
     TimelinePoint,
 )
+from app.services.employees_service import LUMP_SUM_CONVERSION_FACTOR
 from app.services.reduction_rules import calculate_bracket_reduction, get_reduction_rule
 
 INVESTMENT_RETURN = 0.03  # 자산 운용 수익률
@@ -19,6 +23,8 @@ TARGET_AGE_FEMALE = 88  # 여성 목표연령 (통계청 생명표 60세 기대�
 SAVING_CAP_RATIO = 0.3  # 절약 상한 비율 (월 생활비 대비)
 SEARCH_PRECISION = 0.01  # 이진탐색 종료 정밀도 (만원)
 MAX_REDUCTION_RATIO = 0.5  # 감액 상한 비율 (노령연금액의 1/2 초과 감액 불가)
+EARLY_REDUCTION_RATE = 0.3  # 조기수령 감액률 (5년 조기수령 시 월 0.5% x 60개월 최대 감액)
+INSTALLMENT_SPLIT_RATIO = 0.5  # 분할수령 시 일시금/월연금 배분 비율
 
 
 def get_target_age(gender: str) -> int:
@@ -257,3 +263,73 @@ def simulate_pension_reduction(
         status=result.status,
         timeline=result.timeline,
     )
+
+
+def _calculate_lump_sum(monthly_pension: float, current_age: int, target_age: int) -> float:
+    """월연금을 일시금으로 환산한다. employees_service의 일시금 환산 계수(기존 로직)를
+    그대로 재사용해 '월연금 x 12 x 잔여연수'에 적용한다."""
+    remaining_years = max(target_age - current_age, 0)
+    return monthly_pension * 12 * remaining_years * LUMP_SUM_CONVERSION_FACTOR
+
+
+def simulate_scenarios(
+    current_age: int,
+    monthly_expenses: float,
+    monthly_pension: float,
+    asset: float,
+    gender: str,
+) -> ScenariosResult:
+    """정상/조기/일시금/분할 4가지 연금 수령방식을 diagnose_core()에 파라미터만 바꿔
+    순차(동기 for 루프)로 실행하고 비교한다. 자산 시뮬레이션 로직은 diagnose_core()에
+    전적으로 위임하며, 방식별 monthly_pension/asset 조합만 여기서 계산한다.
+
+    일시금 분기(monthly_pension=0으로 두고 자산에 일시금을 더하는 방식)는
+    employees_service.simulate_employees()의 기존 일시금 처리 패턴을 재사용한다.
+    """
+    target_age = get_target_age(gender)
+    lump_sum = _calculate_lump_sum(monthly_pension, current_age, target_age)
+
+    scenario_inputs: dict[ScenarioType, tuple[float, float]] = {
+        ScenarioType.NORMAL: (monthly_pension, asset),
+        ScenarioType.EARLY: (monthly_pension * (1 - EARLY_REDUCTION_RATE), asset),
+        ScenarioType.LUMP_SUM: (0.0, asset + lump_sum),
+        ScenarioType.INSTALLMENT: (
+            monthly_pension * INSTALLMENT_SPLIT_RATIO,
+            asset + lump_sum * INSTALLMENT_SPLIT_RATIO,
+        ),
+    }
+
+    outcomes: list[ScenarioOutcome] = []
+    for scenario_type, (scenario_pension, scenario_asset) in scenario_inputs.items():
+        result = diagnose_core(
+            current_age=current_age,
+            monthly_expenses=monthly_expenses,
+            monthly_pension=scenario_pension,
+            asset=scenario_asset,
+            gender=gender,
+        )
+
+        depletion_age = result.depletion_age if result.depletion_age is not None else MAX_AGE
+        upfront_lump_sum = scenario_asset - asset  # 초기 자산에 더해진 일시금(있는 경우)
+        total_received = sum(point.income for point in result.timeline) + upfront_lump_sum
+
+        outcomes.append(
+            ScenarioOutcome(
+                scenario_type=scenario_type,
+                depletion_age=depletion_age,
+                total_received=round(total_received, 2),
+                timeline=result.timeline,
+            )
+        )
+
+    return ScenariosResult(
+        current_age=current_age,
+        scenarios=outcomes,
+        best_scenario=_select_best_scenario(outcomes),
+    )
+
+
+def _select_best_scenario(outcomes: list[ScenarioOutcome]) -> ScenarioType:
+    """고갈 나이가 가장 큰 시나리오를 선택하고, 동률이면 총 수령액이 큰 시나리오를 선택한다."""
+    best = max(outcomes, key=lambda outcome: (outcome.depletion_age, outcome.total_received))
+    return best.scenario_type
