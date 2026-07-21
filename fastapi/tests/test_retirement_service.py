@@ -2,14 +2,17 @@ import pytest
 
 from app.schemas.retirement import ReadinessStatus, RecommendationType
 from app.services import retirement_service
+from app.services.reduction_rules import get_reduction_rule
 from app.services.retirement_service import (
     MAX_AGE,
+    MAX_REDUCTION_RATIO,
     SAVING_CAP_RATIO,
     TARGET_AGE_FEMALE,
     TARGET_AGE_MALE,
     calculate_status,
     get_target_age,
     recommend_retirement,
+    simulate_pension_reduction,
     simulate_retirement,
 )
 
@@ -189,3 +192,85 @@ def test_recommend_retirement_saving_and_income_when_cap_alone_insufficient():
         gender="female",
     )
     assert under_income.status == ReadinessStatus.INSUFFICIENT
+
+
+def test_simulate_pension_reduction_no_reduction_at_exact_threshold():
+    rule = get_reduction_rule(None)
+
+    result = simulate_pension_reduction(
+        current_age=60,
+        monthly_expenses=200,
+        monthly_pension=150,
+        asset=10_000,
+        gender="male",
+        reemployment_income=rule.threshold,
+    )
+
+    baseline = simulate_retirement(
+        current_age=60,
+        monthly_expenses=200,
+        monthly_pension=150,
+        asset=10_000,
+        gender="male",
+    )
+
+    assert result.monthly_reduction == 0.0
+    assert result.reduced_monthly_pension == 150
+    assert result.full_payment_income_threshold == rule.threshold
+    assert result.depletion_age == baseline.depletion_age
+    assert result.status == baseline.status
+    assert result.timeline == baseline.timeline
+
+
+def test_simulate_pension_reduction_no_reduction_when_income_is_zero():
+    result = simulate_pension_reduction(
+        current_age=60,
+        monthly_expenses=200,
+        monthly_pension=150,
+        asset=10_000,
+        gender="male",
+        reemployment_income=0,
+    )
+
+    assert result.monthly_reduction == 0.0
+    assert result.reduced_monthly_pension == 150
+
+
+def test_simulate_pension_reduction_capped_when_income_far_exceeds_threshold():
+    rule = get_reduction_rule(None)
+    monthly_pension = 150
+
+    result = simulate_pension_reduction(
+        current_age=60,
+        monthly_expenses=200,
+        monthly_pension=monthly_pension,
+        asset=10_000,
+        gender="male",
+        reemployment_income=rule.threshold + 2_000,
+    )
+
+    max_reduction = monthly_pension * MAX_REDUCTION_RATIO
+    assert result.monthly_reduction == pytest.approx(max_reduction)
+    assert result.reduced_monthly_pension == pytest.approx(monthly_pension - max_reduction)
+
+    improved = simulate_retirement(
+        current_age=60,
+        monthly_expenses=200,
+        monthly_pension=monthly_pension - max_reduction,
+        asset=10_000,
+        gender="male",
+    )
+    assert result.depletion_age == improved.depletion_age
+    assert result.status == improved.status
+
+
+def test_simulate_pension_reduction_raises_for_negative_income():
+    with pytest.raises(ValueError):
+        simulate_pension_reduction(
+            current_age=60,
+            monthly_expenses=200,
+            monthly_pension=150,
+            asset=10_000,
+            gender="male",
+            reemployment_income=-1,
+        )
