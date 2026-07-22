@@ -1,6 +1,9 @@
 from app.repositories.employees_income_repository import get_band_mean
 from app.schemas.employees import SimulateRequest, SimulateResponse
 
+LUMP_SUM_CONVERSION_FACTOR = 975 / 1000  # 일시금 환산 계수
+PENSION_RATE = 0.017  # 재직연수 1년당 연금 지급률
+
 
 # 근속월수 구간명
 def _find_band(months: int) -> str:
@@ -43,14 +46,14 @@ def simulate_employees(req: SimulateRequest) -> SimulateResponse:
 
     if retire_months < 12:
         monthly_pension = 0
-        lump_sum = int(estimated_avg_income * (retire_months / 12) * 975 / 1000)
+        lump_sum = int(estimated_avg_income * (retire_months / 12) * LUMP_SUM_CONVERSION_FACTOR)
         severance_pay = 0
     elif retire_months < 120:
         monthly_pension = 0
-        lump_sum = int(estimated_avg_income * (retire_months / 12) * 975 / 1000)
+        lump_sum = int(estimated_avg_income * (retire_months / 12) * LUMP_SUM_CONVERSION_FACTOR)
     else:
         pension_years = min(retire_months / 12, 36)
-        monthly_pension = int(estimated_avg_income * pension_years * 0.017)
+        monthly_pension = int(estimated_avg_income * pension_years * PENSION_RATE)
         lump_sum = 0
 
     return SimulateResponse(
