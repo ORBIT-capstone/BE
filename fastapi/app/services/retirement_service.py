@@ -77,10 +77,10 @@ def simulate_retirement(
             TimelinePoint(
                 age=age,
                 asset=current_asset,
-                income=annual_income,
-                expense=annual_expense,
-                gap=annual_gap,
-                cumulative_gap=cumulative_gap,
+                annual_income=annual_income,
+                annual_expense=annual_expense,
+                annual_gap=annual_gap,
+                cumulative_annual_gap=cumulative_gap,
             )
         )
 
@@ -331,7 +331,7 @@ def _cumulative_received(timeline: list[TimelinePoint], upfront: float) -> list[
     cumulative: list[float] = []
     running = upfront
     for point in timeline:
-        running += point.income
+        running += point.annual_income
         cumulative.append(running)
     return cumulative
 

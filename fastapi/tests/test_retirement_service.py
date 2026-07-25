@@ -97,7 +97,7 @@ def test_simulate_retirement_gap_matches_expense_minus_income_when_pension_grows
     )
 
     for point in result.timeline:
-        assert point.gap == pytest.approx(point.expense - point.income)
+        assert point.annual_gap == pytest.approx(point.annual_expense - point.annual_income)
 
 
 def test_simulate_retirement_depletion_age_capped_at_max_age():
@@ -436,8 +436,8 @@ def test_simulate_scenarios_lump_sum_break_even_age_is_consistent_with_cumulativ
     normal_running = 0.0
     lump_running = upfront
     for n_point, l_point in zip(normal_outcome.timeline, lump_sum_outcome.timeline):
-        normal_running += n_point.income
-        lump_running += l_point.income
+        normal_running += n_point.annual_income
+        lump_running += l_point.annual_income
         if n_point.age < lump_sum_outcome.break_even_age:
             assert normal_running < lump_running
         elif n_point.age == lump_sum_outcome.break_even_age:
@@ -486,7 +486,7 @@ def test_simulate_scenarios_early_reduction_matches_per_year_rate():
 
     early_outcome = next(o for o in result.scenarios if o.scenario_type == ScenarioType.EARLY)
     expected_monthly_income = monthly_pension * (1 - EARLY_REDUCTION_RATE_PER_YEAR * 2) * 12
-    assert early_outcome.timeline[0].income == pytest.approx(expected_monthly_income)
+    assert early_outcome.timeline[0].annual_income == pytest.approx(expected_monthly_income)
 
 
 def test_calculate_lump_sum_and_pension_matches_manual_example():
@@ -598,8 +598,8 @@ def test_simulate_scenarios_lump_sum_and_installment_use_unified_formula():
 
     upfront_lump = lump_sum_outcome.timeline[0].asset - 10_000
     assert upfront_lump == pytest.approx(expected_full_lump_sum)
-    assert lump_sum_outcome.timeline[0].income == pytest.approx(expected_full_pension * 12)
+    assert lump_sum_outcome.timeline[0].annual_income == pytest.approx(expected_full_pension * 12)
 
     upfront_installment = installment_outcome.timeline[0].asset - 10_000
     assert upfront_installment == pytest.approx(expected_split_lump_sum)
-    assert installment_outcome.timeline[0].income == pytest.approx(expected_split_pension * 12)
+    assert installment_outcome.timeline[0].annual_income == pytest.approx(expected_split_pension * 12)
