@@ -5,6 +5,13 @@ from pydantic import BaseModel
 from app.schemas.money import WonAmountInput, WonAmountOutput
 
 
+class Gender(str, Enum):
+    """성별. target_age(목표연령) 산정에 사용된다."""
+
+    MALE = "male"
+    FEMALE = "female"
+
+
 class ReadinessStatus(str, Enum):
     """노후 준비 상태 판정 결과"""
 
@@ -37,7 +44,7 @@ class DiagnosisRequest(BaseModel):
     monthly_expenses: WonAmountInput  # 월 생활비 (원)
     monthly_pension: WonAmountInput  # 월 연금 수령액 (원)
     asset: WonAmountInput  # 현재 보유 자산 (원)
-    gender: str  # 성별 ("male" 또는 "female")
+    gender: Gender  # 성별
 
 
 class RecommendationRequest(DiagnosisRequest):

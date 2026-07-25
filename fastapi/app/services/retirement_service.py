@@ -1,6 +1,7 @@
 import math
 
 from app.schemas.retirement import (
+    Gender,
     ReadinessStatus,
     RecommendationResult,
     RecommendationType,
@@ -31,9 +32,9 @@ MIN_PENSION_YEARS = 10  # 연금 선택 최소 연수 (공제일시금 일부 �
 MAX_DEDUCTION_YEARS = 26  # 공제일시금 선택 최대 연수
 
 
-def get_target_age(gender: str) -> int:
+def get_target_age(gender: Gender) -> int:
     """성별에 따른 목표연령 반환"""
-    if gender == "male":
+    if gender == Gender.MALE:
         return TARGET_AGE_MALE
     return TARGET_AGE_FEMALE
 
@@ -52,7 +53,7 @@ def simulate_retirement(
     monthly_expenses: float,
     monthly_pension: float,
     asset: float,
-    gender: str,
+    gender: Gender,
 ) -> SimulationResult:
     """현재 나이부터 MAX_AGE까지 매년 자산 변화를 시뮬레이션하는 공용 계산 코어.
     diagnosis/recommendations API는 모두 이 함수(별칭 diagnose_core)를 통해서만 시뮬레이션을 수행한다.
@@ -156,7 +157,7 @@ def recommend_retirement(
     monthly_expenses: float,
     monthly_pension: float,
     asset: float,
-    gender: str,
+    gender: Gender,
 ) -> RecommendationResult:
     """MIDDLE/INSUFFICIENT 진단 시 목표연령 도달에 필요한 최소 절약액/추가소득액을 계산.
 
@@ -238,7 +239,7 @@ def simulate_pension_reduction(
     monthly_expenses: float,
     monthly_pension: float,
     asset: float,
-    gender: str,
+    gender: Gender,
     reemployment_income: float,
     year: int | None = None,
 ) -> ReductionResult:
@@ -354,7 +355,7 @@ def simulate_scenarios(
     monthly_expenses: float,
     monthly_pension: float,
     asset: float,
-    gender: str,
+    gender: Gender,
     base_monthly_income: float,
     total_service_years: int,
     early_years: int = EARLY_YEARS_MAX,
