@@ -2,6 +2,8 @@ from enum import Enum
 
 from pydantic import BaseModel
 
+from app.schemas.money import WonAmountInput, WonAmountOutput
+
 
 class ReadinessStatus(str, Enum):
     """노후 준비 상태 판정 결과"""
@@ -13,16 +15,16 @@ class ReadinessStatus(str, Enum):
 
 class TimelinePoint(BaseModel):
     age: int  # 나이
-    asset: float  # 해당 나이 시점의 자산
-    income: float  # 해당 연도 소득(연금)
-    expense: float  # 해당 연도 지출
-    gap: float  # 연간 Gap (지출 - 소득)
-    cumulative_gap: float  # 누적 Gap
+    asset: WonAmountOutput  # 해당 나이 시점의 자산 (원)
+    income: WonAmountOutput  # 해당 연도 소득(연금) (원)
+    expense: WonAmountOutput  # 해당 연도 지출 (원)
+    gap: WonAmountOutput  # 연간 Gap (지출 - 소득) (원)
+    cumulative_gap: WonAmountOutput  # 누적 Gap (원)
 
 
 class SimulationResult(BaseModel):
     current_age: int  # 현재 나이
-    monthly_gap: float  # 현재 시점의 월 Gap (월 생활비 - 월 연금)
+    monthly_gap: WonAmountOutput  # 현재 시점의 월 Gap (월 생활비 - 월 연금) (원)
     depletion_age: int | None  # 자산 고갈 나이 (고갈되지 않으면 None)
     target_age: int  # 목표연령 (성별 고정값)
     status: ReadinessStatus  # 노후 준비 상태
@@ -31,9 +33,9 @@ class SimulationResult(BaseModel):
 
 class DiagnosisRequest(BaseModel):
     current_age: int  # 현재 나이
-    monthly_expenses: float  # 월 생활비
-    monthly_pension: float  # 월 연금 수령액
-    asset: float  # 현재 보유 자산
+    monthly_expenses: WonAmountInput  # 월 생활비 (원)
+    monthly_pension: WonAmountInput  # 월 연금 수령액 (원)
+    asset: WonAmountInput  # 현재 보유 자산 (원)
     gender: str  # 성별 ("male" 또는 "female")
 
 
@@ -52,8 +54,8 @@ class RecommendationType(str, Enum):
 class RecommendationResult(BaseModel):
     current_age: int  # 현재 나이
     recommendation_type: RecommendationType  # 추천 유형
-    required_saving: float  # 필요 월 절약액 (만원)
-    required_income: float  # 필요 월 추가 소득액 (만원)
+    required_saving: WonAmountOutput  # 필요 월 절약액 (원)
+    required_income: WonAmountOutput  # 필요 월 추가 소득액 (원)
     target_status: ReadinessStatus  # 추천 산정에 사용된 목표 기준 (항상 SUFFICIENT="고갈 없음")
     depletion_age: int | None  # 개선 적용 후 자산 고갈 나이
     target_age: int  # 목표연령
@@ -64,16 +66,16 @@ class RecommendationResult(BaseModel):
 class ReductionRequest(DiagnosisRequest):
     """진단(diagnosis)과 동일한 입력 스키마를 재사용하고 재취업 관련 필드를 추가"""
 
-    reemployment_income: float  # 재취업 예상 월소득 (만원)
+    reemployment_income: WonAmountInput  # 재취업 예상 월소득 (원)
     year: int | None = None  # 소득심사 기준 연도 (미지정 시 최신 규칙 적용)
 
 
 class ReductionResult(BaseModel):
     current_age: int  # 현재 나이
-    reemployment_income: float  # 재취업 예상 월소득 (만원)
-    monthly_reduction: float  # 월 감액액 (만원)
-    reduced_monthly_pension: float  # 감액 후 월 실수령 연금액 (만원)
-    full_payment_income_threshold: float  # 전액 수령 가능 소득 상한 (만원)
+    reemployment_income: WonAmountOutput  # 재취업 예상 월소득 (원)
+    monthly_reduction: WonAmountOutput  # 월 감액액 (원)
+    reduced_monthly_pension: WonAmountOutput  # 감액 후 월 실수령 연금액 (원)
+    full_payment_income_threshold: WonAmountOutput  # 전액 수령 가능 소득 상한 (원)
     depletion_age: int | None  # 감액 반영 후 자산 고갈 나이
     target_age: int  # 목표연령
     status: ReadinessStatus  # 감액 반영 후 노후 준비 상태
@@ -84,7 +86,7 @@ class ScenariosRequest(DiagnosisRequest):
     """진단(diagnosis)과 동일한 입력 스키마를 재사용하고 수령방식 계산에 필요한 필드를 추가"""
 
     early_years: int = 5  # 조기수령 연수 (1~5년, 1년당 5% 감액)
-    base_monthly_income: float  # 기준소득월액 (만원) - LUMP_SUM/SPLIT 공제일시금 산식에 사용
+    base_monthly_income: WonAmountInput  # 기준소득월액 (원) - LUMP_SUM/SPLIT 공제일시금 산식에 사용
     total_service_years: int  # 총 재직연수 - LUMP_SUM/SPLIT 공제일시금 산식에 사용
     deduction_years: int | None = None  # SPLIT(분할수령) 공제연수. 미지정 시 제약 내 최댓값으로 클램프
 
@@ -101,7 +103,7 @@ class ScenarioType(str, Enum):
 class ScenarioOutcome(BaseModel):
     scenario_type: ScenarioType  # 수령방식
     depletion_age: int  # 자산 고갈 나이 (고갈되지 않으면 MAX_AGE)
-    total_received: float  # 총 수령액 (만원, current_age~MAX_AGE 동일 기간 기준)
+    total_received: WonAmountOutput  # 총 수령액 (원, current_age~MAX_AGE 동일 기간 기준)
     break_even_age: int | None  # NORMAL 대비 손익분기 나이 (이 나이 이상 생존 시 NORMAL이 유리해짐). NORMAL 자신은 None
     timeline: list[TimelinePoint]  # 연도별 자산 추이
 
