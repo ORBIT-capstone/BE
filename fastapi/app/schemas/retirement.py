@@ -26,6 +26,7 @@ class SimulationResult(BaseModel):
     current_age: int  # 현재 나이
     monthly_gap: WonAmountOutput  # 현재 시점의 월 Gap (월 생활비 - 월 연금) (원)
     depletion_age: int | None  # 자산 고갈 나이 (고갈되지 않으면 None)
+    depleted: bool  # 자산 고갈 여부 (depletion_age is not None과 항상 일치)
     target_age: int  # 목표연령 (성별 고정값)
     status: ReadinessStatus  # 노후 준비 상태
     timeline: list[TimelinePoint]  # 연도별 자산 추이
@@ -58,6 +59,7 @@ class RecommendationResult(BaseModel):
     required_income: WonAmountOutput  # 필요 월 추가 소득액 (원)
     target_status: ReadinessStatus  # 추천 산정에 사용된 목표 기준 (항상 SUFFICIENT="고갈 없음")
     depletion_age: int | None  # 개선 적용 후 자산 고갈 나이
+    depleted: bool  # 개선 적용 후 자산 고갈 여부 (depletion_age is not None과 항상 일치)
     target_age: int  # 목표연령
     status: ReadinessStatus  # 개선 적용 후 노후 준비 상태
     timeline: list[TimelinePoint]  # 개선 적용 후 연도별 자산 추이
@@ -77,6 +79,7 @@ class ReductionResult(BaseModel):
     reduced_monthly_pension: WonAmountOutput  # 감액 후 월 실수령 연금액 (원)
     full_payment_income_threshold: WonAmountOutput  # 전액 수령 가능 소득 상한 (원)
     depletion_age: int | None  # 감액 반영 후 자산 고갈 나이
+    depleted: bool  # 감액 반영 후 자산 고갈 여부 (depletion_age is not None과 항상 일치)
     target_age: int  # 목표연령
     status: ReadinessStatus  # 감액 반영 후 노후 준비 상태
     timeline: list[TimelinePoint]  # 감액 반영 후 연도별 자산 추이
@@ -102,7 +105,8 @@ class ScenarioType(str, Enum):
 
 class ScenarioOutcome(BaseModel):
     scenario_type: ScenarioType  # 수령방식
-    depletion_age: int  # 자산 고갈 나이 (고갈되지 않으면 MAX_AGE)
+    depletion_age: int | None  # 자산 고갈 나이 (고갈되지 않으면 None)
+    depleted: bool  # 자산 고갈 여부 (depletion_age is not None과 항상 일치)
     total_received: WonAmountOutput  # 총 수령액 (원, current_age~MAX_AGE 동일 기간 기준)
     break_even_age: int | None  # NORMAL 대비 손익분기 나이 (이 나이 이상 생존 시 NORMAL이 유리해짐). NORMAL 자신은 None
     timeline: list[TimelinePoint]  # 연도별 자산 추이

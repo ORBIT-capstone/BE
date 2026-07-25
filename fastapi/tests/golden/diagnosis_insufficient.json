@@ -1,6 +1,7 @@
 {
   "body": {
     "current_age": 60,
+    "depleted": true,
     "depletion_age": 68,
     "monthly_gap": 1000000,
     "status": "INSUFFICIENT",
@@ -72,7 +73,7 @@
       },
       {
         "age": 68,
-        "asset": -2351146,
+        "asset": 0,
         "cumulative_gap": 130638853,
         "expense": 35149781,
         "gap": 17149781,
@@ -80,7 +81,7 @@
       },
       {
         "age": 69,
-        "asset": -20085955,
+        "asset": 0,
         "cumulative_gap": 148491630,
         "expense": 35852777,
         "gap": 17852777,
@@ -88,7 +89,7 @@
       },
       {
         "age": 70,
-        "asset": -39076894,
+        "asset": 0,
         "cumulative_gap": 167061463,
         "expense": 36569833,
         "gap": 18569833,
@@ -96,7 +97,7 @@
       },
       {
         "age": 71,
-        "asset": -59376128,
+        "asset": 0,
         "cumulative_gap": 186362692,
         "expense": 37301229,
         "gap": 19301229,
@@ -104,7 +105,7 @@
       },
       {
         "age": 72,
-        "asset": -81037678,
+        "asset": 0,
         "cumulative_gap": 206409946,
         "expense": 38047254,
         "gap": 20047254,
@@ -112,7 +113,7 @@
       },
       {
         "age": 73,
-        "asset": -104117480,
+        "asset": 0,
         "cumulative_gap": 227218145,
         "expense": 38808199,
         "gap": 20808199,
@@ -120,7 +121,7 @@
       },
       {
         "age": 74,
-        "asset": -128673449,
+        "asset": 0,
         "cumulative_gap": 248802507,
         "expense": 39584363,
         "gap": 21584363,
@@ -128,7 +129,7 @@
       },
       {
         "age": 75,
-        "asset": -154765547,
+        "asset": 0,
         "cumulative_gap": 271178558,
         "expense": 40376050,
         "gap": 22376050,
@@ -136,7 +137,7 @@
       },
       {
         "age": 76,
-        "asset": -182455845,
+        "asset": 0,
         "cumulative_gap": 294362129,
         "expense": 41183571,
         "gap": 23183571,
@@ -144,7 +145,7 @@
       },
       {
         "age": 77,
-        "asset": -211808598,
+        "asset": 0,
         "cumulative_gap": 318369371,
         "expense": 42007243,
         "gap": 24007243,
@@ -152,7 +153,7 @@
       },
       {
         "age": 78,
-        "asset": -242890316,
+        "asset": 0,
         "cumulative_gap": 343216759,
         "expense": 42847387,
         "gap": 24847387,
@@ -160,7 +161,7 @@
       },
       {
         "age": 79,
-        "asset": -275769835,
+        "asset": 0,
         "cumulative_gap": 368921094,
         "expense": 43704335,
         "gap": 25704335,
@@ -168,7 +169,7 @@
       },
       {
         "age": 80,
-        "asset": -310518395,
+        "asset": 0,
         "cumulative_gap": 395499516,
         "expense": 44578422,
         "gap": 26578422,
@@ -176,7 +177,7 @@
       },
       {
         "age": 81,
-        "asset": -347209721,
+        "asset": 0,
         "cumulative_gap": 422969506,
         "expense": 45469990,
         "gap": 27469990,
@@ -184,7 +185,7 @@
       },
       {
         "age": 82,
-        "asset": -385920103,
+        "asset": 0,
         "cumulative_gap": 451348896,
         "expense": 46379390,
         "gap": 28379390,
@@ -192,7 +193,7 @@
       },
       {
         "age": 83,
-        "asset": -426728478,
+        "asset": 0,
         "cumulative_gap": 480655874,
         "expense": 47306978,
         "gap": 29306978,
@@ -200,7 +201,7 @@
       },
       {
         "age": 84,
-        "asset": -469716520,
+        "asset": 0,
         "cumulative_gap": 510908992,
         "expense": 48253117,
         "gap": 30253117,
@@ -208,7 +209,7 @@
       },
       {
         "age": 85,
-        "asset": -514968726,
+        "asset": 0,
         "cumulative_gap": 542127172,
         "expense": 49218180,
         "gap": 31218180,
@@ -216,7 +217,7 @@
       },
       {
         "age": 86,
-        "asset": -562572513,
+        "asset": 0,
         "cumulative_gap": 574329715,
         "expense": 50202543,
         "gap": 32202543,
@@ -224,7 +225,7 @@
       },
       {
         "age": 87,
-        "asset": -612618308,
+        "asset": 0,
         "cumulative_gap": 607536309,
         "expense": 51206594,
         "gap": 33206594,
@@ -232,7 +233,7 @@
       },
       {
         "age": 88,
-        "asset": -665199650,
+        "asset": 0,
         "cumulative_gap": 641767035,
         "expense": 52230726,
         "gap": 34230726,
@@ -240,7 +241,7 @@
       },
       {
         "age": 89,
-        "asset": -720413287,
+        "asset": 0,
         "cumulative_gap": 677042376,
         "expense": 53275341,
         "gap": 35275341,
@@ -248,7 +249,7 @@
       },
       {
         "age": 90,
-        "asset": -778359287,
+        "asset": 0,
         "cumulative_gap": 713383224,
         "expense": 54340848,
         "gap": 36340848,
@@ -256,7 +257,7 @@
       },
       {
         "age": 91,
-        "asset": -839141138,
+        "asset": 0,
         "cumulative_gap": 750810888,
         "expense": 55427664,
         "gap": 37427664,
@@ -264,7 +265,7 @@
       },
       {
         "age": 92,
-        "asset": -902865867,
+        "asset": 0,
         "cumulative_gap": 789347106,
         "expense": 56536218,
         "gap": 38536218,
@@ -272,7 +273,7 @@
       },
       {
         "age": 93,
-        "asset": -969644147,
+        "asset": 0,
         "cumulative_gap": 829014048,
         "expense": 57666942,
         "gap": 39666942,
@@ -280,7 +281,7 @@
       },
       {
         "age": 94,
-        "asset": -1039590422,
+        "asset": 0,
         "cumulative_gap": 869834329,
         "expense": 58820281,
         "gap": 40820281,
@@ -288,7 +289,7 @@
       },
       {
         "age": 95,
-        "asset": -1112823024,
+        "asset": 0,
         "cumulative_gap": 911831016,
         "expense": 59996687,
         "gap": 41996687,
@@ -296,7 +297,7 @@
       },
       {
         "age": 96,
-        "asset": -1189464302,
+        "asset": 0,
         "cumulative_gap": 955027636,
         "expense": 61196620,
         "gap": 43196620,
@@ -304,7 +305,7 @@
       },
       {
         "age": 97,
-        "asset": -1269640750,
+        "asset": 0,
         "cumulative_gap": 999448189,
         "expense": 62420553,
         "gap": 44420553,
@@ -312,7 +313,7 @@
       },
       {
         "age": 98,
-        "asset": -1353483142,
+        "asset": 0,
         "cumulative_gap": 1045117152,
         "expense": 63668964,
         "gap": 45668964,
@@ -320,7 +321,7 @@
       },
       {
         "age": 99,
-        "asset": -1441126669,
+        "asset": 0,
         "cumulative_gap": 1092059495,
         "expense": 64942343,
         "gap": 46942343,
@@ -328,7 +329,7 @@
       },
       {
         "age": 100,
-        "asset": -1532711082,
+        "asset": 0,
         "cumulative_gap": 1140300685,
         "expense": 66241190,
         "gap": 48241190,

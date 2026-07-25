@@ -1,6 +1,7 @@
 {
   "body": {
     "current_age": 60,
+    "depleted": false,
     "depletion_age": null,
     "recommendation_type": "SAVING_AND_INCOME",
     "required_income": 2770100,

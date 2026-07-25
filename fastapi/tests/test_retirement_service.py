@@ -381,15 +381,15 @@ def test_simulate_scenarios_timeline_matches_diagnosis_core_format():
 def test_select_best_scenario_breaks_tie_by_total_received():
     outcomes = [
         ScenarioOutcome(
-            scenario_type=ScenarioType.NORMAL, depletion_age=80, total_received=1000.0,
+            scenario_type=ScenarioType.NORMAL, depletion_age=80, depleted=True, total_received=1000.0,
             break_even_age=None, timeline=[],
         ),
         ScenarioOutcome(
-            scenario_type=ScenarioType.EARLY, depletion_age=80, total_received=1500.0,
+            scenario_type=ScenarioType.EARLY, depletion_age=80, depleted=True, total_received=1500.0,
             break_even_age=None, timeline=[],
         ),
         ScenarioOutcome(
-            scenario_type=ScenarioType.LUMP_SUM, depletion_age=75, total_received=9999.0,
+            scenario_type=ScenarioType.LUMP_SUM, depletion_age=75, depleted=True, total_received=9999.0,
             break_even_age=70, timeline=[],
         ),
     ]

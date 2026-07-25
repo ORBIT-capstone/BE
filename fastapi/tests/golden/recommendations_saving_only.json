@@ -1,6 +1,7 @@
 {
   "body": {
     "current_age": 60,
+    "depleted": false,
     "depletion_age": null,
     "recommendation_type": "SAVING_ONLY",
     "required_income": 0,
