@@ -1,6 +1,7 @@
 {
   "body": {
     "current_age": 65,
+    "depleted": false,
     "depletion_age": null,
     "monthly_gap": -500000,
     "status": "SUFFICIENT",

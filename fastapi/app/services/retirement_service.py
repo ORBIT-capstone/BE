@@ -89,6 +89,9 @@ def simulate_retirement(
         if depletion_age is None and annual_gap > 0 and current_asset <= 0:
             depletion_age = age + 1
 
+        if current_asset < 0:
+            current_asset = 0.0
+
         annual_expense *= 1 + INFLATION_RATE
         annual_income *= 1 + PENSION_GROWTH_RATE
         annual_gap = annual_expense - annual_income
@@ -103,6 +106,7 @@ def simulate_retirement(
         current_age=current_age,
         monthly_gap=monthly_gap,
         depletion_age=depletion_age,
+        depleted=depletion_age is not None,
         target_age=target_age,
         status=status,
         timeline=timeline,
@@ -177,6 +181,7 @@ def recommend_retirement(
             required_income=0.0,
             target_status=ReadinessStatus.SUFFICIENT,
             depletion_age=baseline.depletion_age,
+            depleted=baseline.depleted,
             target_age=baseline.target_age,
             status=baseline.status,
             timeline=baseline.timeline,
@@ -221,6 +226,7 @@ def recommend_retirement(
         required_income=required_income,
         target_status=ReadinessStatus.SUFFICIENT,
         depletion_age=improved.depletion_age,
+        depleted=improved.depleted,
         target_age=improved.target_age,
         status=improved.status,
         timeline=improved.timeline,
@@ -265,6 +271,7 @@ def simulate_pension_reduction(
         reduced_monthly_pension=round(reduced_monthly_pension, 2),
         full_payment_income_threshold=rule.threshold,
         depletion_age=result.depletion_age,
+        depleted=result.depleted,
         target_age=result.target_age,
         status=result.status,
         timeline=result.timeline,
@@ -402,7 +409,6 @@ def simulate_scenarios(
 
     outcomes: list[ScenarioOutcome] = []
     for scenario_type, (result, _upfront, cumulative) in simulated.items():
-        depletion_age = result.depletion_age if result.depletion_age is not None else MAX_AGE
         total_received = cumulative[-1] if cumulative else 0.0
         break_even_age = (
             None
@@ -413,7 +419,8 @@ def simulate_scenarios(
         outcomes.append(
             ScenarioOutcome(
                 scenario_type=scenario_type,
-                depletion_age=depletion_age,
+                depletion_age=result.depletion_age,
+                depleted=result.depleted,
                 total_received=round(total_received, 2),
                 break_even_age=break_even_age,
                 timeline=result.timeline,
@@ -428,6 +435,12 @@ def simulate_scenarios(
 
 
 def _select_best_scenario(outcomes: list[ScenarioOutcome]) -> ScenarioType:
-    """고갈 나이가 가장 큰 시나리오를 선택하고, 동률이면 총 수령액이 큰 시나리오를 선택한다."""
-    best = max(outcomes, key=lambda outcome: (outcome.depletion_age, outcome.total_received))
+    """고갈 나이가 가장 큰 시나리오를 선택하고, 동률이면 총 수령액이 큰 시나리오를 선택한다.
+    depletion_age가 None(무고갈)인 시나리오는 가장 늦게 고갈되는 것으로 간주해 최우선한다."""
+
+    def sort_key(outcome: ScenarioOutcome) -> tuple[float, float]:
+        depletion_for_sort = outcome.depletion_age if outcome.depletion_age is not None else math.inf
+        return (depletion_for_sort, outcome.total_received)
+
+    best = max(outcomes, key=sort_key)
     return best.scenario_type

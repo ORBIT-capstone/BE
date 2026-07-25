@@ -1,6 +1,7 @@
 {
   "body": {
     "current_age": 60,
+    "depleted": true,
     "depletion_age": 96,
     "monthly_gap": 500000,
     "status": "MIDDLE",
@@ -296,7 +297,7 @@
       },
       {
         "age": 96,
-        "asset": -21357441,
+        "asset": 0,
         "cumulative_gap": 630822109,
         "expense": 48957296,
         "gap": 30957296,
@@ -304,7 +305,7 @@
       },
       {
         "age": 97,
-        "asset": -53884180,
+        "asset": 0,
         "cumulative_gap": 662758551,
         "expense": 49936442,
         "gap": 31936442,
@@ -312,7 +313,7 @@
       },
       {
         "age": 98,
-        "asset": -88395241,
+        "asset": 0,
         "cumulative_gap": 695693722,
         "expense": 50935171,
         "gap": 32935171,
@@ -320,7 +321,7 @@
       },
       {
         "age": 99,
-        "asset": -124970324,
+        "asset": 0,
         "cumulative_gap": 729647596,
         "expense": 51953874,
         "gap": 33953874,
@@ -328,7 +329,7 @@
       },
       {
         "age": 100,
-        "asset": -163691924,
+        "asset": 0,
         "cumulative_gap": 764640548,
         "expense": 52992952,
         "gap": 34992952,
