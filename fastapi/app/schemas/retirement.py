@@ -16,10 +16,10 @@ class ReadinessStatus(str, Enum):
 class TimelinePoint(BaseModel):
     age: int  # 나이
     asset: WonAmountOutput  # 해당 나이 시점의 자산 (원)
-    income: WonAmountOutput  # 해당 연도 소득(연금) (원)
-    expense: WonAmountOutput  # 해당 연도 지출 (원)
-    gap: WonAmountOutput  # 연간 Gap (지출 - 소득) (원)
-    cumulative_gap: WonAmountOutput  # 누적 Gap (원)
+    annual_income: WonAmountOutput  # 해당 연도 소득(연금) (원, 연 단위)
+    annual_expense: WonAmountOutput  # 해당 연도 지출 (원, 연 단위)
+    annual_gap: WonAmountOutput  # 연간 Gap (지출 - 소득) (원, 연 단위)
+    cumulative_annual_gap: WonAmountOutput  # 누적 Gap (원, annual_gap의 누적합)
 
 
 class SimulationResult(BaseModel):
