@@ -17,6 +17,11 @@ from app.main import app
 
 GOLDEN_DIR = Path(__file__).parent / "golden"
 
+# retirement 계열 엔드포인트는 #1(금액 단위 통일)로 요청/응답이 만원 -> 원으로 바뀌었다.
+# 케이스가 나타내는 실제 시나리오(예: "월 생활비 250만원")는 그대로 유지하기 위해
+# 만원 단위였던 리터럴에 WON_PER_MANWON을 곱해 원 단위로 표현한다.
+WON_PER_MANWON = 10_000
+
 CASES = [
     # --- /api/retirement/diagnosis ---
     {
@@ -24,9 +29,9 @@ CASES = [
         "path": "/api/retirement/diagnosis",
         "body": {
             "current_age": 65,
-            "monthly_expenses": 150,
-            "monthly_pension": 200,
-            "asset": 10000,
+            "monthly_expenses": 150 * WON_PER_MANWON,
+            "monthly_pension": 200 * WON_PER_MANWON,
+            "asset": 10000 * WON_PER_MANWON,
             "gender": "male",
         },
     },
@@ -35,9 +40,9 @@ CASES = [
         "path": "/api/retirement/diagnosis",
         "body": {
             "current_age": 60,
-            "monthly_expenses": 250,
-            "monthly_pension": 150,
-            "asset": 10000,
+            "monthly_expenses": 250 * WON_PER_MANWON,
+            "monthly_pension": 150 * WON_PER_MANWON,
+            "asset": 10000 * WON_PER_MANWON,
             "gender": "male",
         },
     },
@@ -46,9 +51,9 @@ CASES = [
         "path": "/api/retirement/diagnosis",
         "body": {
             "current_age": 60,
-            "monthly_expenses": 200,
-            "monthly_pension": 150,
-            "asset": 32000,
+            "monthly_expenses": 200 * WON_PER_MANWON,
+            "monthly_pension": 150 * WON_PER_MANWON,
+            "asset": 32000 * WON_PER_MANWON,
             "gender": "female",
         },
     },
@@ -58,9 +63,9 @@ CASES = [
         "path": "/api/retirement/recommendations",
         "body": {
             "current_age": 65,
-            "monthly_expenses": 150,
-            "monthly_pension": 200,
-            "asset": 10000,
+            "monthly_expenses": 150 * WON_PER_MANWON,
+            "monthly_pension": 200 * WON_PER_MANWON,
+            "asset": 10000 * WON_PER_MANWON,
             "gender": "male",
         },
     },
@@ -69,9 +74,9 @@ CASES = [
         "path": "/api/retirement/recommendations",
         "body": {
             "current_age": 60,
-            "monthly_expenses": 250,
-            "monthly_pension": 200,
-            "asset": 15000,
+            "monthly_expenses": 250 * WON_PER_MANWON,
+            "monthly_pension": 200 * WON_PER_MANWON,
+            "asset": 15000 * WON_PER_MANWON,
             "gender": "male",
         },
     },
@@ -80,9 +85,9 @@ CASES = [
         "path": "/api/retirement/recommendations",
         "body": {
             "current_age": 60,
-            "monthly_expenses": 400,
-            "monthly_pension": 100,
-            "asset": 5000,
+            "monthly_expenses": 400 * WON_PER_MANWON,
+            "monthly_pension": 100 * WON_PER_MANWON,
+            "asset": 5000 * WON_PER_MANWON,
             "gender": "female",
         },
     },
@@ -92,9 +97,9 @@ CASES = [
         "path": "/api/retirement/reduction",
         "body": {
             "current_age": 60,
-            "monthly_expenses": 200,
-            "monthly_pension": 150,
-            "asset": 10000,
+            "monthly_expenses": 200 * WON_PER_MANWON,
+            "monthly_pension": 150 * WON_PER_MANWON,
+            "asset": 10000 * WON_PER_MANWON,
             "gender": "male",
             "reemployment_income": 0,
         },
@@ -104,11 +109,11 @@ CASES = [
         "path": "/api/retirement/reduction",
         "body": {
             "current_age": 60,
-            "monthly_expenses": 200,
-            "monthly_pension": 150,
-            "asset": 10000,
+            "monthly_expenses": 200 * WON_PER_MANWON,
+            "monthly_pension": 150 * WON_PER_MANWON,
+            "asset": 10000 * WON_PER_MANWON,
             "gender": "male",
-            "reemployment_income": 500,
+            "reemployment_income": 500 * WON_PER_MANWON,
         },
     },
     {
@@ -116,11 +121,11 @@ CASES = [
         "path": "/api/retirement/reduction",
         "body": {
             "current_age": 60,
-            "monthly_expenses": 200,
-            "monthly_pension": 150,
-            "asset": 10000,
+            "monthly_expenses": 200 * WON_PER_MANWON,
+            "monthly_pension": 150 * WON_PER_MANWON,
+            "asset": 10000 * WON_PER_MANWON,
             "gender": "male",
-            "reemployment_income": 99999,
+            "reemployment_income": 99999 * WON_PER_MANWON,
         },
     },
     # --- /api/retirement/scenarios ---
@@ -129,11 +134,11 @@ CASES = [
         "path": "/api/retirement/scenarios",
         "body": {
             "current_age": 60,
-            "monthly_expenses": 250,
-            "monthly_pension": 150,
-            "asset": 10000,
+            "monthly_expenses": 250 * WON_PER_MANWON,
+            "monthly_pension": 150 * WON_PER_MANWON,
+            "asset": 10000 * WON_PER_MANWON,
             "gender": "male",
-            "base_monthly_income": 300,
+            "base_monthly_income": 300 * WON_PER_MANWON,
             "total_service_years": 25,
         },
     },
@@ -142,11 +147,11 @@ CASES = [
         "path": "/api/retirement/scenarios",
         "body": {
             "current_age": 60,
-            "monthly_expenses": 250,
-            "monthly_pension": 150,
-            "asset": 10000,
+            "monthly_expenses": 250 * WON_PER_MANWON,
+            "monthly_pension": 150 * WON_PER_MANWON,
+            "asset": 10000 * WON_PER_MANWON,
             "gender": "male",
-            "base_monthly_income": 300,
+            "base_monthly_income": 300 * WON_PER_MANWON,
             "total_service_years": 25,
             "deduction_years": 15,
         },
