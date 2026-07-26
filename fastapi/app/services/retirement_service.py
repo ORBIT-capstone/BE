@@ -1,6 +1,7 @@
 import math
 
 from app.schemas.retirement import (
+    Gender,
     ReadinessStatus,
     RecommendationResult,
     RecommendationType,
@@ -31,9 +32,9 @@ MIN_PENSION_YEARS = 10  # 연금 선택 최소 연수 (공제일시금 일부 �
 MAX_DEDUCTION_YEARS = 26  # 공제일시금 선택 최대 연수
 
 
-def get_target_age(gender: str) -> int:
+def get_target_age(gender: Gender) -> int:
     """성별에 따른 목표연령 반환"""
-    if gender == "male":
+    if gender == Gender.MALE:
         return TARGET_AGE_MALE
     return TARGET_AGE_FEMALE
 
@@ -52,7 +53,7 @@ def simulate_retirement(
     monthly_expenses: float,
     monthly_pension: float,
     asset: float,
-    gender: str,
+    gender: Gender,
 ) -> SimulationResult:
     """현재 나이부터 MAX_AGE까지 매년 자산 변화를 시뮬레이션하는 공용 계산 코어.
     diagnosis/recommendations API는 모두 이 함수(별칭 diagnose_core)를 통해서만 시뮬레이션을 수행한다.
@@ -77,10 +78,10 @@ def simulate_retirement(
             TimelinePoint(
                 age=age,
                 asset=current_asset,
-                income=annual_income,
-                expense=annual_expense,
-                gap=annual_gap,
-                cumulative_gap=cumulative_gap,
+                annual_income=annual_income,
+                annual_expense=annual_expense,
+                annual_gap=annual_gap,
+                cumulative_annual_gap=cumulative_gap,
             )
         )
 
@@ -88,6 +89,9 @@ def simulate_retirement(
 
         if depletion_age is None and annual_gap > 0 and current_asset <= 0:
             depletion_age = age + 1
+
+        if current_asset < 0:
+            current_asset = 0.0
 
         annual_expense *= 1 + INFLATION_RATE
         annual_income *= 1 + PENSION_GROWTH_RATE
@@ -103,6 +107,7 @@ def simulate_retirement(
         current_age=current_age,
         monthly_gap=monthly_gap,
         depletion_age=depletion_age,
+        depleted=depletion_age is not None,
         target_age=target_age,
         status=status,
         timeline=timeline,
@@ -152,7 +157,7 @@ def recommend_retirement(
     monthly_expenses: float,
     monthly_pension: float,
     asset: float,
-    gender: str,
+    gender: Gender,
 ) -> RecommendationResult:
     """MIDDLE/INSUFFICIENT 진단 시 목표연령 도달에 필요한 최소 절약액/추가소득액을 계산.
 
@@ -177,6 +182,7 @@ def recommend_retirement(
             required_income=0.0,
             target_status=ReadinessStatus.SUFFICIENT,
             depletion_age=baseline.depletion_age,
+            depleted=baseline.depleted,
             target_age=baseline.target_age,
             status=baseline.status,
             timeline=baseline.timeline,
@@ -221,6 +227,7 @@ def recommend_retirement(
         required_income=required_income,
         target_status=ReadinessStatus.SUFFICIENT,
         depletion_age=improved.depletion_age,
+        depleted=improved.depleted,
         target_age=improved.target_age,
         status=improved.status,
         timeline=improved.timeline,
@@ -232,7 +239,7 @@ def simulate_pension_reduction(
     monthly_expenses: float,
     monthly_pension: float,
     asset: float,
-    gender: str,
+    gender: Gender,
     reemployment_income: float,
     year: int | None = None,
 ) -> ReductionResult:
@@ -265,6 +272,7 @@ def simulate_pension_reduction(
         reduced_monthly_pension=round(reduced_monthly_pension, 2),
         full_payment_income_threshold=rule.threshold,
         depletion_age=result.depletion_age,
+        depleted=result.depleted,
         target_age=result.target_age,
         status=result.status,
         timeline=result.timeline,
@@ -324,7 +332,7 @@ def _cumulative_received(timeline: list[TimelinePoint], upfront: float) -> list[
     cumulative: list[float] = []
     running = upfront
     for point in timeline:
-        running += point.income
+        running += point.annual_income
         cumulative.append(running)
     return cumulative
 
@@ -347,7 +355,7 @@ def simulate_scenarios(
     monthly_expenses: float,
     monthly_pension: float,
     asset: float,
-    gender: str,
+    gender: Gender,
     base_monthly_income: float,
     total_service_years: int,
     early_years: int = EARLY_YEARS_MAX,
@@ -402,7 +410,6 @@ def simulate_scenarios(
 
     outcomes: list[ScenarioOutcome] = []
     for scenario_type, (result, _upfront, cumulative) in simulated.items():
-        depletion_age = result.depletion_age if result.depletion_age is not None else MAX_AGE
         total_received = cumulative[-1] if cumulative else 0.0
         break_even_age = (
             None
@@ -413,7 +420,8 @@ def simulate_scenarios(
         outcomes.append(
             ScenarioOutcome(
                 scenario_type=scenario_type,
-                depletion_age=depletion_age,
+                depletion_age=result.depletion_age,
+                depleted=result.depleted,
                 total_received=round(total_received, 2),
                 break_even_age=break_even_age,
                 timeline=result.timeline,
@@ -428,6 +436,12 @@ def simulate_scenarios(
 
 
 def _select_best_scenario(outcomes: list[ScenarioOutcome]) -> ScenarioType:
-    """고갈 나이가 가장 큰 시나리오를 선택하고, 동률이면 총 수령액이 큰 시나리오를 선택한다."""
-    best = max(outcomes, key=lambda outcome: (outcome.depletion_age, outcome.total_received))
+    """고갈 나이가 가장 큰 시나리오를 선택하고, 동률이면 총 수령액이 큰 시나리오를 선택한다.
+    depletion_age가 None(무고갈)인 시나리오는 가장 늦게 고갈되는 것으로 간주해 최우선한다."""
+
+    def sort_key(outcome: ScenarioOutcome) -> tuple[float, float]:
+        depletion_for_sort = outcome.depletion_age if outcome.depletion_age is not None else math.inf
+        return (depletion_for_sort, outcome.total_received)
+
+    best = max(outcomes, key=sort_key)
     return best.scenario_type

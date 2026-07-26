@@ -63,6 +63,11 @@ htmlcov/
 *.sqlite3
 mysql_data/
 data/
+# 런타임에 필요한 집계 통계 파일만 예외적으로 커밋한다(개인 단위 원본 데이터 아님).
+# 디렉터리를 먼저 풀어준 뒤 그 안의 나머지 파일은 다시 전부 무시하고, 대상 파일 하나만 재포함한다.
+!fastapi/data/
+fastapi/data/*
+!fastapi/data/active_income_stats.csv
 
 # =========================
 # Docker

@@ -1,0 +1,344 @@
+{
+  "body": {
+    "current_age": 60,
+    "depleted": true,
+    "depletion_age": 67,
+    "full_payment_income_threshold": 3097000,
+    "monthly_reduction": 750000,
+    "reduced_monthly_pension": 750000,
+    "reemployment_income": 999990000,
+    "status": "INSUFFICIENT",
+    "target_age": 84,
+    "timeline": [
+      {
+        "age": 60,
+        "annual_expense": 24000000,
+        "annual_gap": 15000000,
+        "annual_income": 9000000,
+        "asset": 100000000,
+        "cumulative_annual_gap": 15000000
+      },
+      {
+        "age": 61,
+        "annual_expense": 24480000,
+        "annual_gap": 15480000,
+        "annual_income": 9000000,
+        "asset": 87550000,
+        "cumulative_annual_gap": 30480000
+      },
+      {
+        "age": 62,
+        "annual_expense": 24969600,
+        "annual_gap": 15969600,
+        "annual_income": 9000000,
+        "asset": 74232100,
+        "cumulative_annual_gap": 46449600
+      },
+      {
+        "age": 63,
+        "annual_expense": 25468992,
+        "annual_gap": 16468992,
+        "annual_income": 9000000,
+        "asset": 60010375,
+        "cumulative_annual_gap": 62918592
+      },
+      {
+        "age": 64,
+        "annual_expense": 25978372,
+        "annual_gap": 16978372,
+        "annual_income": 9000000,
+        "asset": 44847624,
+        "cumulative_annual_gap": 79896964
+      },
+      {
+        "age": 65,
+        "annual_expense": 26497939,
+        "annual_gap": 17497939,
+        "annual_income": 9000000,
+        "asset": 28705330,
+        "cumulative_annual_gap": 97394903
+      },
+      {
+        "age": 66,
+        "annual_expense": 27027898,
+        "annual_gap": 18027898,
+        "annual_income": 9000000,
+        "asset": 11543613,
+        "cumulative_annual_gap": 115422801
+      },
+      {
+        "age": 67,
+        "annual_expense": 27568456,
+        "annual_gap": 18568456,
+        "annual_income": 9000000,
+        "asset": 0,
+        "cumulative_annual_gap": 133991257
+      },
+      {
+        "age": 68,
+        "annual_expense": 28119825,
+        "annual_gap": 19119825,
+        "annual_income": 9000000,
+        "asset": 0,
+        "cumulative_annual_gap": 153111082
+      },
+      {
+        "age": 69,
+        "annual_expense": 28682222,
+        "annual_gap": 19682222,
+        "annual_income": 9000000,
+        "asset": 0,
+        "cumulative_annual_gap": 172793304
+      },
+      {
+        "age": 70,
+        "annual_expense": 29255866,
+        "annual_gap": 20255866,
+        "annual_income": 9000000,
+        "asset": 0,
+        "cumulative_annual_gap": 193049170
+      },
+      {
+        "age": 71,
+        "annual_expense": 29840983,
+        "annual_gap": 20840983,
+        "annual_income": 9000000,
+        "asset": 0,
+        "cumulative_annual_gap": 213890153
+      },
+      {
+        "age": 72,
+        "annual_expense": 30437803,
+        "annual_gap": 21437803,
+        "annual_income": 9000000,
+        "asset": 0,
+        "cumulative_annual_gap": 235327957
+      },
+      {
+        "age": 73,
+        "annual_expense": 31046559,
+        "annual_gap": 22046559,
+        "annual_income": 9000000,
+        "asset": 0,
+        "cumulative_annual_gap": 257374516
+      },
+      {
+        "age": 74,
+        "annual_expense": 31667490,
+        "annual_gap": 22667490,
+        "annual_income": 9000000,
+        "asset": 0,
+        "cumulative_annual_gap": 280042006
+      },
+      {
+        "age": 75,
+        "annual_expense": 32300840,
+        "annual_gap": 23300840,
+        "annual_income": 9000000,
+        "asset": 0,
+        "cumulative_annual_gap": 303342846
+      },
+      {
+        "age": 76,
+        "annual_expense": 32946857,
+        "annual_gap": 23946857,
+        "annual_income": 9000000,
+        "asset": 0,
+        "cumulative_annual_gap": 327289703
+      },
+      {
+        "age": 77,
+        "annual_expense": 33605794,
+        "annual_gap": 24605794,
+        "annual_income": 9000000,
+        "asset": 0,
+        "cumulative_annual_gap": 351895497
+      },
+      {
+        "age": 78,
+        "annual_expense": 34277910,
+        "annual_gap": 25277910,
+        "annual_income": 9000000,
+        "asset": 0,
+        "cumulative_annual_gap": 377173407
+      },
+      {
+        "age": 79,
+        "annual_expense": 34963468,
+        "annual_gap": 25963468,
+        "annual_income": 9000000,
+        "asset": 0,
+        "cumulative_annual_gap": 403136875
+      },
+      {
+        "age": 80,
+        "annual_expense": 35662738,
+        "annual_gap": 26662738,
+        "annual_income": 9000000,
+        "asset": 0,
+        "cumulative_annual_gap": 429799613
+      },
+      {
+        "age": 81,
+        "annual_expense": 36375992,
+        "annual_gap": 27375992,
+        "annual_income": 9000000,
+        "asset": 0,
+        "cumulative_annual_gap": 457175605
+      },
+      {
+        "age": 82,
+        "annual_expense": 37103512,
+        "annual_gap": 28103512,
+        "annual_income": 9000000,
+        "asset": 0,
+        "cumulative_annual_gap": 485279117
+      },
+      {
+        "age": 83,
+        "annual_expense": 37845582,
+        "annual_gap": 28845582,
+        "annual_income": 9000000,
+        "asset": 0,
+        "cumulative_annual_gap": 514124699
+      },
+      {
+        "age": 84,
+        "annual_expense": 38602494,
+        "annual_gap": 29602494,
+        "annual_income": 9000000,
+        "asset": 0,
+        "cumulative_annual_gap": 543727193
+      },
+      {
+        "age": 85,
+        "annual_expense": 39374544,
+        "annual_gap": 30374544,
+        "annual_income": 9000000,
+        "asset": 0,
+        "cumulative_annual_gap": 574101737
+      },
+      {
+        "age": 86,
+        "annual_expense": 40162035,
+        "annual_gap": 31162035,
+        "annual_income": 9000000,
+        "asset": 0,
+        "cumulative_annual_gap": 605263772
+      },
+      {
+        "age": 87,
+        "annual_expense": 40965275,
+        "annual_gap": 31965275,
+        "annual_income": 9000000,
+        "asset": 0,
+        "cumulative_annual_gap": 637229047
+      },
+      {
+        "age": 88,
+        "annual_expense": 41784581,
+        "annual_gap": 32784581,
+        "annual_income": 9000000,
+        "asset": 0,
+        "cumulative_annual_gap": 670013628
+      },
+      {
+        "age": 89,
+        "annual_expense": 42620273,
+        "annual_gap": 33620273,
+        "annual_income": 9000000,
+        "asset": 0,
+        "cumulative_annual_gap": 703633901
+      },
+      {
+        "age": 90,
+        "annual_expense": 43472678,
+        "annual_gap": 34472678,
+        "annual_income": 9000000,
+        "asset": 0,
+        "cumulative_annual_gap": 738106579
+      },
+      {
+        "age": 91,
+        "annual_expense": 44342132,
+        "annual_gap": 35342132,
+        "annual_income": 9000000,
+        "asset": 0,
+        "cumulative_annual_gap": 773448711
+      },
+      {
+        "age": 92,
+        "annual_expense": 45228974,
+        "annual_gap": 36228974,
+        "annual_income": 9000000,
+        "asset": 0,
+        "cumulative_annual_gap": 809677685
+      },
+      {
+        "age": 93,
+        "annual_expense": 46133554,
+        "annual_gap": 37133554,
+        "annual_income": 9000000,
+        "asset": 0,
+        "cumulative_annual_gap": 846811238
+      },
+      {
+        "age": 94,
+        "annual_expense": 47056225,
+        "annual_gap": 38056225,
+        "annual_income": 9000000,
+        "asset": 0,
+        "cumulative_annual_gap": 884867463
+      },
+      {
+        "age": 95,
+        "annual_expense": 47997349,
+        "annual_gap": 38997349,
+        "annual_income": 9000000,
+        "asset": 0,
+        "cumulative_annual_gap": 923864812
+      },
+      {
+        "age": 96,
+        "annual_expense": 48957296,
+        "annual_gap": 39957296,
+        "annual_income": 9000000,
+        "asset": 0,
+        "cumulative_annual_gap": 963822109
+      },
+      {
+        "age": 97,
+        "annual_expense": 49936442,
+        "annual_gap": 40936442,
+        "annual_income": 9000000,
+        "asset": 0,
+        "cumulative_annual_gap": 1004758551
+      },
+      {
+        "age": 98,
+        "annual_expense": 50935171,
+        "annual_gap": 41935171,
+        "annual_income": 9000000,
+        "asset": 0,
+        "cumulative_annual_gap": 1046693722
+      },
+      {
+        "age": 99,
+        "annual_expense": 51953874,
+        "annual_gap": 42953874,
+        "annual_income": 9000000,
+        "asset": 0,
+        "cumulative_annual_gap": 1089647596
+      },
+      {
+        "age": 100,
+        "annual_expense": 52992952,
+        "annual_gap": 43992952,
+        "annual_income": 9000000,
+        "asset": 0,
+        "cumulative_annual_gap": 1133640548
+      }
+    ]
+  },
+  "status_code": 200
+}
