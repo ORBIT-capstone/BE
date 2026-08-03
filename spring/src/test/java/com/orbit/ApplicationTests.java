@@ -35,6 +35,56 @@ class ApplicationTests {
 	}
 
 	@Test
+	void duplicateEmailReturns409Conflict() throws Exception {
+		String requestBody = """
+			{
+			  "email": "duplicate-test@example.com",
+			  "password": "password123",
+			  "name": "Duplicate User",
+			  "birthDate": "1995-01-01",
+			  "gender": "MALE"
+			}
+			""";
+
+		mockMvc.perform(post("/api/users/signup")
+				.contentType(MediaType.APPLICATION_JSON)
+				.content(requestBody))
+			.andExpect(status().isCreated());
+
+		mockMvc.perform(post("/api/users/signup")
+				.contentType(MediaType.APPLICATION_JSON)
+				.content(requestBody))
+			.andExpect(status().isConflict())
+			.andExpect(jsonPath("$.code").value("DUPLICATE_EMAIL"))
+			.andExpect(jsonPath("$.message").isNotEmpty())
+			.andExpect(jsonPath("$.details[0].field").value("email"))
+			.andExpect(jsonPath("$.details[0].reason").isNotEmpty())
+			.andExpect(jsonPath("$.timestamp").isNotEmpty());
+	}
+
+	@Test
+	void validationErrorUsesUnifiedResponseShape() throws Exception {
+		mockMvc.perform(post("/api/users/signup")
+				.contentType(MediaType.APPLICATION_JSON)
+				.content("""
+					{
+					  "email": "not-an-email",
+					  "password": "short",
+					  "name": "",
+					  "birthDate": "1995-01-01",
+					  "gender": "MALE"
+					}
+					"""))
+			.andExpect(status().isBadRequest())
+			.andExpect(jsonPath("$.code").value("VALIDATION_ERROR"))
+			.andExpect(jsonPath("$.message").isNotEmpty())
+			.andExpect(jsonPath("$.details").isArray())
+			.andExpect(jsonPath("$.details[0].field").isNotEmpty())
+			.andExpect(jsonPath("$.details[0].reason").isNotEmpty())
+			.andExpect(jsonPath("$.timestamp").isNotEmpty());
+	}
+
+	@Test
 	void getMeDoesNotReturnEmploymentStatus() throws Exception {
 		mockMvc.perform(post("/api/users/signup")
 				.contentType(MediaType.APPLICATION_JSON)

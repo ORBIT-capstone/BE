@@ -1,11 +1,13 @@
 package com.orbit.global.exception;
 
 import com.orbit.diagnoses.exception.DiagnosisNotFoundException;
+import com.orbit.diagnoses.exception.FastApiInvalidRequestException;
 import com.orbit.diagnoses.exception.FastApiUnavailableException;
 import com.orbit.users.exception.DuplicateEmailException;
 import com.orbit.users.exception.InvalidCredentialsException;
 import com.orbit.users.exception.InvalidTokenException;
 import com.orbit.users.exception.UnauthorizedException;
+import java.util.List;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.http.ResponseEntity;
@@ -22,21 +24,24 @@ public class GlobalExceptionHandler {
 
 	@ExceptionHandler(MethodArgumentNotValidException.class)
 	public ResponseEntity<ErrorResponse> handleValidationException(MethodArgumentNotValidException exception) {
-		String message = exception.getBindingResult()
+		List<ErrorDetail> details = exception.getBindingResult()
 			.getFieldErrors()
 			.stream()
-			.findFirst()
-			.map(error -> error.getField() + ": " + error.getDefaultMessage())
-			.orElse("요청 값이 올바르지 않습니다.");
+			.map(error -> new ErrorDetail(error.getField(), error.getDefaultMessage()))
+			.toList();
 
 		return ResponseEntity.badRequest()
-			.body(ErrorResponse.of("INVALID_REQUEST", message));
+			.body(ErrorResponse.of("VALIDATION_ERROR", "입력값을 확인해주세요.", details));
 	}
 
 	@ExceptionHandler(DuplicateEmailException.class)
 	public ResponseEntity<ErrorResponse> handleDuplicateEmail(DuplicateEmailException exception) {
-		return ResponseEntity.status(HttpStatus.UNPROCESSABLE_ENTITY)
-			.body(ErrorResponse.of("DUPLICATE_EMAIL", exception.getMessage()));
+		return ResponseEntity.status(HttpStatus.CONFLICT)
+			.body(ErrorResponse.of(
+				"DUPLICATE_EMAIL",
+				exception.getMessage(),
+				List.of(new ErrorDetail("email", "이미 사용 중인 이메일입니다."))
+			));
 	}
 
 	@ExceptionHandler(InvalidCredentialsException.class)
@@ -61,7 +66,11 @@ public class GlobalExceptionHandler {
 	public ResponseEntity<ErrorResponse> handleTypeMismatch(MethodArgumentTypeMismatchException exception) {
 		String message = exception.getName() + " 값이 올바르지 않습니다.";
 		return ResponseEntity.badRequest()
-			.body(ErrorResponse.of("INVALID_REQUEST", message));
+			.body(ErrorResponse.of(
+				"INVALID_REQUEST",
+				message,
+				List.of(new ErrorDetail(exception.getName(), "요청 값의 타입이 올바르지 않습니다."))
+			));
 	}
 
 	@ExceptionHandler(NoResourceFoundException.class)
@@ -80,6 +89,12 @@ public class GlobalExceptionHandler {
 	public ResponseEntity<ErrorResponse> handleFastApiUnavailable(FastApiUnavailableException exception) {
 		return ResponseEntity.status(HttpStatus.BAD_GATEWAY)
 			.body(ErrorResponse.of("FASTAPI_UNAVAILABLE", exception.getMessage()));
+	}
+
+	@ExceptionHandler(FastApiInvalidRequestException.class)
+	public ResponseEntity<ErrorResponse> handleFastApiInvalidRequest(FastApiInvalidRequestException exception) {
+		return ResponseEntity.badRequest()
+			.body(exception.getErrorResponse());
 	}
 
 	@ExceptionHandler(HttpRequestMethodNotSupportedException.class)
