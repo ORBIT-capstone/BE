@@ -11,6 +11,22 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Test Spring
+        working-directory: spring
+        run: ./gradlew test --no-daemon
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Test FastAPI
+        working-directory: fastapi
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pytest -q
+
       - name: Build Spring image
         run: docker build ./spring
 
