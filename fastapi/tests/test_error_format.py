@@ -11,6 +11,7 @@
 """
 
 import pytest
+from datetime import datetime
 from fastapi.testclient import TestClient
 
 from app.main import app
@@ -22,10 +23,11 @@ def client():
 
 
 def _assert_unified_error_shape(body: dict) -> None:
-    assert set(body.keys()) == {"code", "message", "details"}
+    assert set(body.keys()) == {"code", "message", "details", "timestamp"}
     assert isinstance(body["code"], str) and body["code"]
     assert isinstance(body["message"], str) and body["message"]
     assert isinstance(body["details"], list)
+    assert datetime.fromisoformat(body["timestamp"])
     for detail in body["details"]:
         assert set(detail.keys()) == {"field", "reason"}
         assert isinstance(detail["reason"], str) and detail["reason"]
@@ -42,7 +44,7 @@ def test_pydantic_type_error_returns_unified_shape(client):
             "gender": "male",
         },
     )
-    assert response.status_code == 422
+    assert response.status_code == 400
     body = response.json()
     _assert_unified_error_shape(body)
     assert body["code"] == "VALIDATION_ERROR"
@@ -50,7 +52,7 @@ def test_pydantic_type_error_returns_unified_shape(client):
     assert "current_age" in fields
 
 
-def test_business_rule_error_returns_unified_shape_with_korean_message(client):
+def test_non_positive_expenses_returns_validation_error(client):
     response = client.post(
         "/api/retirement/diagnosis",
         json={
@@ -64,8 +66,8 @@ def test_business_rule_error_returns_unified_shape_with_korean_message(client):
     assert response.status_code == 400
     body = response.json()
     _assert_unified_error_shape(body)
-    assert body["code"] == "INVALID_INPUT"
-    assert "0보다 커야" in body["message"]
+    assert body["code"] == "VALIDATION_ERROR"
+    assert any(detail["field"] == "monthly_expenses" for detail in body["details"])
 
 
 def test_model_validator_error_strips_english_value_error_prefix(client):
@@ -78,7 +80,7 @@ def test_model_validator_error_strips_english_value_error_prefix(client):
             "retire_at_age": 50,
         },
     )
-    assert response.status_code == 422
+    assert response.status_code == 400
     body = response.json()
     _assert_unified_error_shape(body)
     assert "Value error" not in body["message"]
@@ -96,7 +98,7 @@ def test_invalid_gender_enum_returns_unified_shape(client):
             "gender": "MALE",
         },
     )
-    assert response.status_code == 422
+    assert response.status_code == 400
     body = response.json()
     _assert_unified_error_shape(body)
     fields = {d["field"] for d in body["details"]}
@@ -115,5 +117,18 @@ def test_invalid_gender_enum_returns_unified_shape(client):
 )
 def test_all_endpoints_share_same_error_envelope(client, path, body):
     response = client.post(path, json=body)
-    assert response.status_code == 422
+    assert response.status_code == 400
     _assert_unified_error_shape(response.json())
+
+
+def test_openapi_documents_400_with_unified_error_schema(client):
+    schema = client.get("/openapi.json").json()
+    operation = schema["paths"]["/api/retirement/diagnosis"]["post"]
+
+    assert "422" not in operation["responses"]
+    assert operation["responses"]["400"]["content"]["application/json"]["schema"] == {
+        "$ref": "#/components/schemas/ErrorResponse"
+    }
+    error_schema = schema["components"]["schemas"]["ErrorResponse"]
+    assert set(error_schema["required"]) == {"code", "message"}
+    assert {"details", "timestamp"} <= set(error_schema["properties"])

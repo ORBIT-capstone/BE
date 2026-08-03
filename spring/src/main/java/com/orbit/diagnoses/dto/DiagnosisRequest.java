@@ -3,6 +3,7 @@ package com.orbit.diagnoses.dto;
 import com.orbit.users.domain.Gender;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Positive;
 import jakarta.validation.constraints.PositiveOrZero;
 
@@ -11,19 +12,20 @@ public record DiagnosisRequest(
 	@Schema(description = "현재 나이", example = "60")
 	@NotNull
 	@Positive
+	@Max(100)
 	Integer currentAge,
 
-	@Schema(description = "월 생활비", example = "250")
+	@Schema(description = "월 생활비(원)", example = "2500000")
 	@NotNull
 	@Positive
 	Double monthlyExpenses,
 
-	@Schema(description = "월 연금 수령액", example = "150")
+	@Schema(description = "월 연금 수령액(원)", example = "1500000")
 	@NotNull
 	@PositiveOrZero
 	Double monthlyPension,
 
-	@Schema(description = "현재 보유 자산", example = "10000")
+	@Schema(description = "현재 보유 자산(원)", example = "100000000")
 	@NotNull
 	@PositiveOrZero
 	Double asset,

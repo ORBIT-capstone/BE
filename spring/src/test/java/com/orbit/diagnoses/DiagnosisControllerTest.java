@@ -9,7 +9,13 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.orbit.diagnoses.client.FastApiDiagnosisClient;
 import com.orbit.diagnoses.dto.DiagnosisRequest;
+import com.orbit.diagnoses.dto.FastApiDiagnosisResponse;
 import com.orbit.diagnoses.exception.FastApiUnavailableException;
+import com.orbit.diagnoses.exception.FastApiInvalidRequestException;
+import com.orbit.global.exception.ErrorDetail;
+import com.orbit.global.exception.ErrorResponse;
+import java.time.OffsetDateTime;
+import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -36,9 +42,9 @@ class DiagnosisControllerTest {
 	private static final String DIAGNOSIS_REQUEST_BODY = """
 		{
 		  "currentAge": 60,
-		  "monthlyExpenses": 250,
-		  "monthlyPension": 150,
-		  "asset": 10000,
+		  "monthlyExpenses": 2500000,
+		  "monthlyPension": 1500000,
+		  "asset": 100000000,
 		  "gender": "MALE"
 		}
 		""";
@@ -88,24 +94,25 @@ class DiagnosisControllerTest {
 		accessToken = objectMapper.readTree(loginResponse).get("accessToken").asString();
 	}
 
-	private JsonNode fastApiResult(int depletionAge, String status) throws Exception {
-		return objectMapper.readTree("""
+	private FastApiDiagnosisResponse fastApiResult(int depletionAge, String status) throws Exception {
+		return FastApiDiagnosisResponse.from(objectMapper.readTree("""
 			{
 			  "current_age": 60,
-			  "monthly_gap": 100.0,
+			  "monthly_gap": 1000000,
 			  "depletion_age": %d,
+			  "depleted": true,
 			  "target_age": 84,
 			  "status": "%s",
 			  "timeline": [
-			    {"age": 60, "asset": 10000.0, "income": 1800.0, "expense": 3000.0, "gap": 1200.0, "cumulative_gap": 1200.0}
+			    {"age": 60, "asset": 100000000, "annual_income": 18000000, "annual_expense": 30000000, "annual_gap": 12000000, "cumulative_annual_gap": 12000000}
 			  ]
 			}
-			""".formatted(depletionAge, status));
+			""".formatted(depletionAge, status)));
 	}
 
 	@Test
-	void createDiagnosisSavesAndReturnsFastApiResultAsIs() throws Exception {
-		JsonNode result = fastApiResult(75, "INSUFFICIENT");
+	void createDiagnosisSavesAndReturnsDetailWithId() throws Exception {
+		FastApiDiagnosisResponse result = fastApiResult(75, "INSUFFICIENT");
 		when(fastApiDiagnosisClient.diagnose(any(DiagnosisRequest.class))).thenReturn(result);
 
 		mockMvc.perform(post("/api/diagnoses")
@@ -114,13 +121,17 @@ class DiagnosisControllerTest {
 				.content(DIAGNOSIS_REQUEST_BODY))
 			.andExpect(status().isCreated())
 			.andExpect(jsonPath("$.status").value("INSUFFICIENT"))
-			.andExpect(jsonPath("$.depletion_age").value(75))
-			.andExpect(jsonPath("$.timeline[0].age").value(60));
+			.andExpect(jsonPath("$.id").isNumber())
+			.andExpect(jsonPath("$.depletionAge").value(75))
+			.andExpect(jsonPath("$.createdAt").exists())
+			.andExpect(jsonPath("$.result.status").value("INSUFFICIENT"))
+			.andExpect(jsonPath("$.result.depletion_age").value(75))
+			.andExpect(jsonPath("$.result.timeline[0].age").value(60));
 	}
 
 	@Test
 	void listAndGetDiagnosisFlowWorks() throws Exception {
-		JsonNode result = fastApiResult(80, "MIDDLE");
+		FastApiDiagnosisResponse result = fastApiResult(80, "MIDDLE");
 		when(fastApiDiagnosisClient.diagnose(any(DiagnosisRequest.class))).thenReturn(result);
 
 		String createResponse = mockMvc.perform(post("/api/diagnoses")
@@ -131,8 +142,8 @@ class DiagnosisControllerTest {
 			.andReturn()
 			.getResponse()
 			.getContentAsString();
-		// FastAPI 원본 응답에는 id가 없으므로, 목록 조회로 생성된 진단의 id를 확인한다
-		org.junit.jupiter.api.Assertions.assertTrue(createResponse.contains("\"status\":\"MIDDLE\""));
+		// 생성 응답의 ID로 목록 및 상세 조회 결과를 연계한다.
+		Long id = objectMapper.readTree(createResponse).get("id").asLong();
 
 		String listResponse = mockMvc.perform(get("/api/diagnoses")
 				.header("Authorization", "Bearer " + accessToken))
@@ -143,7 +154,10 @@ class DiagnosisControllerTest {
 			.getResponse()
 			.getContentAsString();
 
-		Long id = objectMapper.readTree(listResponse).get(0).get("id").asLong();
+		org.junit.jupiter.api.Assertions.assertEquals(
+			id.longValue(),
+			objectMapper.readTree(listResponse).get(0).get("id").asLong()
+		);
 
 		mockMvc.perform(get("/api/diagnoses/" + id)
 				.header("Authorization", "Bearer " + accessToken))
@@ -171,7 +185,7 @@ class DiagnosisControllerTest {
 
 	@Test
 	void getDiagnosisOfAnotherUserReturns404() throws Exception {
-		JsonNode result = fastApiResult(80, "MIDDLE");
+		FastApiDiagnosisResponse result = fastApiResult(80, "MIDDLE");
 		when(fastApiDiagnosisClient.diagnose(any(DiagnosisRequest.class))).thenReturn(result);
 
 		String createResponse = mockMvc.perform(post("/api/diagnoses")
@@ -258,5 +272,29 @@ class DiagnosisControllerTest {
 				.header("Authorization", "Bearer " + accessToken))
 			.andExpect(status().isOk())
 			.andExpect(jsonPath("$.length()").value(0));
+	}
+
+	@Test
+	void createDiagnosisReturns400WhenFastApiRejectsInput() throws Exception {
+		OffsetDateTime fastApiTimestamp = OffsetDateTime.parse("2026-08-04T12:34:56Z");
+		ErrorResponse fastApiError = new ErrorResponse(
+			"VALIDATION_ERROR",
+			"정수여야 합니다.",
+			List.of(new ErrorDetail("current_age", "정수여야 합니다.")),
+			fastApiTimestamp
+		);
+		when(fastApiDiagnosisClient.diagnose(any(DiagnosisRequest.class)))
+			.thenThrow(new FastApiInvalidRequestException(fastApiError, new RuntimeException("bad request")));
+
+		mockMvc.perform(post("/api/diagnoses")
+				.header("Authorization", "Bearer " + accessToken)
+				.contentType(MediaType.APPLICATION_JSON)
+				.content(DIAGNOSIS_REQUEST_BODY))
+			.andExpect(status().isBadRequest())
+			.andExpect(jsonPath("$.code").value("VALIDATION_ERROR"))
+			.andExpect(jsonPath("$.message").value("정수여야 합니다."))
+			.andExpect(jsonPath("$.details[0].field").value("current_age"))
+			.andExpect(jsonPath("$.details[0].reason").value("정수여야 합니다."))
+			.andExpect(jsonPath("$.timestamp").value(fastApiTimestamp.toString()));
 	}
 }

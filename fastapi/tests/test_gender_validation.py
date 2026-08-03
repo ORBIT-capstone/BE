@@ -3,7 +3,7 @@
 기존에는 gender: str에 아무 제약이 없어, "MALE"(대문자 오타) 같은 값이
 get_target_age()의 `if gender == "male": ... else: FEMALE` 분기를 타고
 조용히 여성 목표연령(88세)으로 처리됐다(HTTP 200). 이제는 "male"/"female"
-외의 값은 422로 거부되어야 한다.
+외의 값은 400으로 거부되어야 한다.
 """
 
 import pytest
@@ -40,6 +40,6 @@ def test_diagnosis_accepts_female(client):
 
 
 @pytest.mark.parametrize("invalid_gender", ["MALE", "Male", "m", "남성", "unknown", ""])
-def test_diagnosis_rejects_invalid_gender_with_422(client, invalid_gender):
+def test_diagnosis_rejects_invalid_gender_with_400(client, invalid_gender):
     response = client.post("/api/retirement/diagnosis", json=_diagnosis_body(invalid_gender))
-    assert response.status_code == 422
+    assert response.status_code == 400

@@ -1,9 +1,14 @@
 package com.orbit.users.controller;
 
+import com.orbit.global.exception.ErrorResponse;
 import com.orbit.users.dto.RefreshTokenRequest;
 import com.orbit.users.dto.TokenResponse;
 import com.orbit.users.service.AuthService;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.Schema;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -23,6 +28,10 @@ public class AuthController {
 
 	@PostMapping("/refresh")
 	@Operation(summary = "토큰 재발급", description = "리프레시 토큰을 검증하고 새 액세스 토큰과 리프레시 토큰을 발급합니다.")
+	@ApiResponses({
+		@ApiResponse(responseCode = "400", description = "요청 값 검증 실패", content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
+		@ApiResponse(responseCode = "401", description = "유효하지 않은 리프레시 토큰", content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
+	})
 	public ResponseEntity<TokenResponse> refresh(@Valid @RequestBody RefreshTokenRequest request) {
 		return ResponseEntity.ok(authService.refresh(request.refreshToken()));
 	}
