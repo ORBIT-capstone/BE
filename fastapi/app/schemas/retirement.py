@@ -1,6 +1,6 @@
 from enum import Enum
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from app.schemas.money import WonAmountInput, WonAmountOutput
 
@@ -40,10 +40,10 @@ class SimulationResult(BaseModel):
 
 
 class DiagnosisRequest(BaseModel):
-    current_age: int  # 현재 나이
-    monthly_expenses: WonAmountInput  # 월 생활비 (원)
-    monthly_pension: WonAmountInput  # 월 연금 수령액 (원)
-    asset: WonAmountInput  # 현재 보유 자산 (원)
+    current_age: int = Field(ge=1, le=100)  # 현재 나이
+    monthly_expenses: WonAmountInput = Field(gt=0)  # 월 생활비 (원)
+    monthly_pension: WonAmountInput = Field(ge=0)  # 월 연금 수령액 (원)
+    asset: WonAmountInput = Field(ge=0)  # 현재 보유 자산 (원)
     gender: Gender  # 성별
 
 
@@ -75,7 +75,7 @@ class RecommendationResult(BaseModel):
 class ReductionRequest(DiagnosisRequest):
     """진단(diagnosis)과 동일한 입력 스키마를 재사용하고 재취업 관련 필드를 추가"""
 
-    reemployment_income: WonAmountInput  # 재취업 예상 월소득 (원)
+    reemployment_income: WonAmountInput = Field(ge=0)  # 재취업 예상 월소득 (원)
     year: int | None = None  # 소득심사 기준 연도 (미지정 시 최신 규칙 적용)
 
 
@@ -95,10 +95,10 @@ class ReductionResult(BaseModel):
 class ScenariosRequest(DiagnosisRequest):
     """진단(diagnosis)과 동일한 입력 스키마를 재사용하고 수령방식 계산에 필요한 필드를 추가"""
 
-    early_years: int = 5  # 조기수령 연수 (1~5년, 1년당 5% 감액)
-    base_monthly_income: WonAmountInput  # 기준소득월액 (원) - LUMP_SUM/SPLIT 공제일시금 산식에 사용
-    total_service_years: int  # 총 재직연수 - LUMP_SUM/SPLIT 공제일시금 산식에 사용
-    deduction_years: int | None = None  # SPLIT(분할수령) 공제연수. 미지정 시 제약 내 최댓값으로 클램프
+    early_years: int = Field(default=5, ge=1, le=5)  # 조기수령 연수 (1~5년, 1년당 5% 감액)
+    base_monthly_income: WonAmountInput = Field(gt=0)  # 기준소득월액 (원) - LUMP_SUM/SPLIT 공제일시금 산식에 사용
+    total_service_years: int = Field(ge=10, le=100)  # 총 재직연수 - LUMP_SUM/SPLIT 공제일시금 산식에 사용
+    deduction_years: int | None = Field(default=None, ge=0, le=26)  # SPLIT(분할수령) 공제연수
 
 
 class ScenarioType(str, Enum):
