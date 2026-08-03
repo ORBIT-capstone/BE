@@ -5,6 +5,7 @@ import com.orbit.diagnoses.domain.Diagnosis;
 import com.orbit.diagnoses.dto.DiagnosisDetailResponse;
 import com.orbit.diagnoses.dto.DiagnosisRequest;
 import com.orbit.diagnoses.dto.DiagnosisSummaryResponse;
+import com.orbit.diagnoses.dto.FastApiDiagnosisResponse;
 import com.orbit.diagnoses.exception.DiagnosisNotFoundException;
 import com.orbit.diagnoses.repository.DiagnosisRepository;
 import java.util.List;
@@ -23,21 +24,22 @@ public class DiagnosisService {
 	private final FastApiDiagnosisClient fastApiDiagnosisClient;
 	private final ObjectMapper objectMapper;
 
-	public JsonNode createDiagnosis(Long userId, DiagnosisRequest request) {
+	public DiagnosisDetailResponse createDiagnosis(Long userId, DiagnosisRequest request) {
 		// FastAPI 호출 완료 후에만 저장을 수행한다(트랜잭션 없이) — 호출 실패 시 자연스럽게 미저장되고,
 		// 네트워크 대기 동안 DB 커넥션을 점유하지 않는다.
-		JsonNode result = fastApiDiagnosisClient.diagnose(request);
+		FastApiDiagnosisResponse response = fastApiDiagnosisClient.diagnose(request);
+		JsonNode result = response.raw();
 
 		Diagnosis diagnosis = Diagnosis.builder()
 			.userId(userId)
-			.status(result.path("status").asString(null))
-			.depletionAge(result.hasNonNull("depletion_age") ? result.get("depletion_age").asInt() : null)
+			.status(response.status())
+			.depletionAge(response.depletionAge())
 			.resultJson(result.toString())
 			.build();
 
-		diagnosisRepository.save(diagnosis);
+		Diagnosis savedDiagnosis = diagnosisRepository.save(diagnosis);
 
-		return result;
+		return DiagnosisDetailResponse.from(savedDiagnosis, result);
 	}
 
 	@Transactional(readOnly = true)
