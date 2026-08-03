@@ -1,7 +1,7 @@
-"""전 엔드포인트의 에러 응답을 app/schemas/errors.py의 단일 포맷으로 통일하는 핸들러.
+"""FastAPI 요청 검증 오류와 HTTPException을 공통 에러 응답으로 변환한다.
 
-- RequestValidationError(Pydantic 422): 필드별 원인을 한국어로 번역해 details에 담는다.
-- HTTPException(라우터가 ValueError를 잡아 400/500으로 던진 것): 동일 포맷으로 감싼다.
+- RequestValidationError: HTTP 400으로 변환하고 필드별 오류를 details에 담는다.
+- HTTPException: 기존 HTTP 상태 코드를 유지하면서 공통 에러 응답으로 변환한다.
 """
 
 from fastapi import FastAPI, Request
@@ -69,10 +69,10 @@ def register_error_handlers(app: FastAPI) -> None:
             message=_validation_error_message(details),
             details=details,
         )
-        return JSONResponse(status_code=422, content=body.model_dump())
+        return JSONResponse(status_code=400, content=body.model_dump(mode="json"))
 
     @app.exception_handler(StarletteHTTPException)
     async def _handle_http_exception(request: Request, exc: StarletteHTTPException) -> JSONResponse:
         message = exc.detail if isinstance(exc.detail, str) else "요청을 처리할 수 없습니다."
         body = ErrorResponse(code=_error_code_for_status(exc.status_code), message=message, details=[])
-        return JSONResponse(status_code=exc.status_code, content=body.model_dump())
+        return JSONResponse(status_code=exc.status_code, content=body.model_dump(mode="json"))
