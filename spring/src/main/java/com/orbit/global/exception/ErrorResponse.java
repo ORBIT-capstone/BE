@@ -1,14 +1,20 @@
 package com.orbit.global.exception;
 
-import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
+import java.util.List;
 
 public record ErrorResponse(
 	String code,
 	String message,
-	LocalDateTime timestamp
+	List<ErrorDetail> details,
+	OffsetDateTime timestamp
 ) {
 
 	public static ErrorResponse of(String code, String message) {
-		return new ErrorResponse(code, message, LocalDateTime.now());
+		return of(code, message, List.of());
+	}
+
+	public static ErrorResponse of(String code, String message, List<ErrorDetail> details) {
+		return new ErrorResponse(code, message, List.copyOf(details), OffsetDateTime.now());
 	}
 }
