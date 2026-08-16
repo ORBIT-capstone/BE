@@ -703,3 +703,86 @@ def test_calculate_lump_sum_and_pension_under_cap_unaffected():
     )
     assert lump_sum == pytest.approx(4132.05)
     assert monthly_pension == pytest.approx(86.7)
+
+
+# --- 회귀 수정: 전액공제(LUMP_SUM) + 총재직연수>36년일 때 음수 pension_years 방지 ---
+
+
+def test_calculate_lump_sum_and_pension_full_deduction_over_cap_stays_zero():
+    # total_service_years=40(>36), deduction_years=40(전액공제) -> 캡을 일시금·연금
+    # 양쪽에 일관 적용해야 pension_years가 음수가 되지 않고 0을 유지해야 한다.
+    # 수정 전에는 min(40,36)-40 = -4로 음수가 나왔다(회귀).
+    _lump_sum, monthly_pension = _calculate_lump_sum_and_pension(
+        base_monthly_income=300,
+        total_service_years=40,
+        deduction_years=40,
+    )
+    assert monthly_pension == pytest.approx(0.0)
+
+
+def test_calculate_lump_sum_and_pension_full_deduction_over_cap_uses_capped_years_for_lump_sum():
+    # 공제일시금도 퇴직급여이므로 부칙 제11조 상한(36년)이 적용돼야 한다 —
+    # effective_deduction_years는 min(40,36)=36으로 캡된 값을 써야 한다.
+    lump_sum, _monthly_pension = _calculate_lump_sum_and_pension(
+        base_monthly_income=300,
+        total_service_years=40,
+        deduction_years=40,
+    )
+    from app.services.retirement_service import LUMP_SUM_CONVERSION_FACTOR, LUMP_SUM_SQUARE_FACTOR
+
+    expected = 300 * 36 * (LUMP_SUM_CONVERSION_FACTOR + LUMP_SUM_SQUARE_FACTOR * 36)
+    assert lump_sum == pytest.approx(expected)
+
+
+def test_simulate_scenarios_lump_sum_over_cap_matches_unified_formula():
+    # simulate_scenarios의 LUMP_SUM 시나리오(공제연수=총재직연수)가 total_service_years>36
+    # 케이스에서도 _calculate_lump_sum_and_pension과 정확히 같은 값을 내는지 확인
+    # (기존 test_simulate_scenarios_lump_sum_and_installment_use_unified_formula와 동일 성격).
+    total_service_years = 40
+    base_monthly_income = 300
+
+    result = simulate_scenarios(
+        current_age=60,
+        monthly_expenses=250,
+        monthly_pension=150,
+        asset=10_000,
+        gender="male",
+        base_monthly_income=base_monthly_income,
+        total_service_years=total_service_years,
+        deduction_years=None,
+    )
+
+    expected_lump_sum, expected_pension = _calculate_lump_sum_and_pension(
+        base_monthly_income, total_service_years, total_service_years
+    )
+    assert expected_pension == 0.0
+
+    lump_sum_outcome = next(o for o in result.scenarios if o.scenario_type == ScenarioType.LUMP_SUM)
+    upfront_lump = lump_sum_outcome.timeline[0].asset - 10_000
+    assert upfront_lump == pytest.approx(expected_lump_sum)
+    assert lump_sum_outcome.timeline[0].annual_income == pytest.approx(0.0)
+
+
+@pytest.mark.parametrize(
+    "total_service_years,deduction_years",
+    [
+        (30, 13),
+        (25, 25),
+        (25, 0),
+        (36, 36),  # 상한과 정확히 같은 경계값 — 캡이 걸리지 않는 경계
+    ],
+)
+def test_calculate_lump_sum_and_pension_under_or_at_cap_matches_uncapped_formula(
+    total_service_years, deduction_years
+):
+    """회귀 방지: total_service_years <= 36(상한)인 기존 케이스들은 캡 적용 여부와
+    무관하게 이전의 단순식(total_service_years - deduction_years)과 정확히 같아야 한다."""
+    from app.services.employees_service import PENSION_RATE
+
+    _lump_sum, monthly_pension = _calculate_lump_sum_and_pension(
+        base_monthly_income=300,
+        total_service_years=total_service_years,
+        deduction_years=deduction_years,
+    )
+    expected_pension_years = total_service_years - deduction_years
+    assert monthly_pension == pytest.approx(300 * expected_pension_years * PENSION_RATE)

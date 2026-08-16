@@ -1,20 +1,8 @@
-from enum import Enum
-
 from pydantic import BaseModel, Field, model_validator
 
+from app.services.service_cap_rules import CapBasis
 
-class CapBasis(str, Enum):
-    """연금월액 계산에 적용된 재직기간 상한의 근거.
-
-    - STATUTORY_TIERED: 사학연금법 부칙(법률 제13561호) 제11조 경과조치 표
-      (2016.1.1 시점 재직기간에 따라 33/34/35/36년 차등).
-    - STATUTORY_DEFAULT: 2016.1.1 이후 임용(경과조치 비대상) -> 본칙 36년.
-    - DEFAULT_MAX: service_months_as_of_2016 미제공 -> 판정 불가, 36년 폴백.
-    """
-
-    STATUTORY_TIERED = "STATUTORY_TIERED"
-    STATUTORY_DEFAULT = "STATUTORY_DEFAULT"
-    DEFAULT_MAX = "DEFAULT_MAX"
+__all__ = ["CapBasis", "SimulateRequest", "SimulateResponse"]
 
 
 class SimulateRequest(BaseModel):
