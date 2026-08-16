@@ -289,26 +289,35 @@ def _calculate_lump_sum_and_pension(
     공제일시금 = 기준소득월액 x 공제연수 x (LUMP_SUM_CONVERSION_FACTOR + LUMP_SUM_SQUARE_FACTOR x 공제연수)
     (사학연금공단 공식: 기준소득월액x(공제재직월수/12)x975/1000 + 기준소득월액x(공제재직월수/12)^2x65/10000)
 
-    연금 부분은 재직연수를 '연금 선택 연수'(=min(총재직연수, 재직기간 상한)-공제연수)로
-    치환해 employees_service의 기존 퇴직연금 산식(PENSION_RATE)을 그대로 재사용한다.
-    상한을 먼저 적용한 뒤 공제연수를 빼야 한다 — 순서를 바꾸면(공제연수를 먼저 뺀 뒤
-    상한을 적용하면) 총재직연수가 상한을 넘는 사람의 공제 효과가 왜곡된다.
+    상한(재직기간 상한, 이 함수 내부에서는 항상 36년 — 아래 참조)을 총재직연수와
+    공제연수 양쪽에 일관되게 적용한다:
+      1. capped_service_years = min(총재직연수, 상한)
+      2. effective_deduction_years = min(공제연수, capped_service_years)
+         — 공제일시금도 퇴직급여이므로 부칙 제11조 상한이 적용된다. 이 캡이 없으면
+           총재직연수가 상한을 넘는 사람의 공제일시금만 상한을 벗어나 회귀가 생긴다
+           (아래 3번 불변식이 깨짐 — tests/test_retirement_service.py 참조).
+      3. 연금 선택 연수 = capped_service_years - effective_deduction_years (항상 >= 0)
+    이렇게 구한 연금 선택 연수로 employees_service의 기존 퇴직연금 산식(PENSION_RATE)을
+    그대로 재사용한다.
 
     ScenariosRequest에는 2016.1.1 시점 재직기간 입력이 없으므로 여기서는 항상
     resolve_pension_service_cap_months(None) -> 본칙 36년(cap_basis=DEFAULT_MAX)을
     적용한다. 이전에는 이 상한 자체가 없어 total_service_years(최대 100년, 스키마
     제약)가 그대로 연금 선택 연수 계산에 들어갔다 — 확정 결함이었다(engine_defects.md).
 
-    deduction_years == total_service_years(전액 공제)이면 연금 선택 연수가 0이 되어
-    monthly_pension=0, lump_sum은 곧 퇴직연금일시금(LUMP_SUM) 산식과 동일해진다 —
-    LUMP_SUM/SPLIT(분할) 두 시나리오 모두 이 함수 하나로 계산한다(중복 계산 없음).
+    deduction_years == total_service_years(전액 공제)이면 연금 선택 연수가 항상 0이
+    되어(총재직연수가 상한을 넘어도 effective_deduction_years가 함께 캡되므로) monthly_pension=0을
+    유지하며, lump_sum은 곧 퇴직연금일시금(LUMP_SUM) 산식과 동일해진다 — LUMP_SUM/SPLIT
+    (분할) 두 시나리오 모두 이 함수 하나로 계산한다(중복 계산 없음).
     """
-    lump_sum = base_monthly_income * deduction_years * (
-        LUMP_SUM_CONVERSION_FACTOR + LUMP_SUM_SQUARE_FACTOR * deduction_years
-    )
     cap_months, _cap_basis = resolve_pension_service_cap_months(None)
     capped_service_years = min(total_service_years, cap_months / 12)
-    pension_years = capped_service_years - deduction_years
+    effective_deduction_years = min(deduction_years, capped_service_years)
+
+    lump_sum = base_monthly_income * effective_deduction_years * (
+        LUMP_SUM_CONVERSION_FACTOR + LUMP_SUM_SQUARE_FACTOR * effective_deduction_years
+    )
+    pension_years = capped_service_years - effective_deduction_years
     monthly_pension = base_monthly_income * pension_years * PENSION_RATE
     return lump_sum, monthly_pension
 

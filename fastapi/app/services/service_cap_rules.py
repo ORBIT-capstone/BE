@@ -33,6 +33,23 @@
 
 from __future__ import annotations
 
+from enum import Enum
+
+
+class CapBasis(str, Enum):
+    """연금월액 계산에 적용된 재직기간 상한의 근거.
+
+    - STATUTORY_TIERED: 사학연금법 부칙(법률 제13561호) 제11조 경과조치 표
+      (2016.1.1 시점 재직기간에 따라 33/34/35/36년 차등).
+    - STATUTORY_DEFAULT: 2016.1.1 이후 임용(경과조치 비대상) -> 본칙 36년.
+    - DEFAULT_MAX: service_months_as_of_2016 미제공 -> 판정 불가, 36년 폴백.
+    """
+
+    STATUTORY_TIERED = "STATUTORY_TIERED"
+    STATUTORY_DEFAULT = "STATUTORY_DEFAULT"
+    DEFAULT_MAX = "DEFAULT_MAX"
+
+
 # 경과조치(제11조) 표: (하한_개월수, 상한_개월수) — 하한 개월수 이상이면 해당 상한 적용.
 # 내림차순으로 순회하며 첫 매치를 사용한다. 21년=252개월, 17년=204개월, 15년=180개월.
 _STATUTORY_TIERED_CAP_MONTHS: list[tuple[int, int]] = [
@@ -49,31 +66,31 @@ DEFAULT_MAX_CAP_MONTHS = 432
 
 def resolve_pension_service_cap_months(
     service_months_as_of_2016: int | None,
-) -> tuple[int, str]:
+) -> tuple[int, CapBasis]:
     """2016.1.1 시점 인정 재직월수로 퇴직급여 산정 재직기간 상한(개월)을 판정한다.
 
     반환: (상한_개월수, cap_basis)
-      - "STATUTORY_TIERED": 2016.1.1 당시 재직 중이었음(service_months_as_of_2016 > 0)
+      - CapBasis.STATUTORY_TIERED: 2016.1.1 당시 재직 중이었음(service_months_as_of_2016 > 0)
         -> 부칙 제11조 경과조치 표(33/34/35/36년 차등) 적용.
-      - "STATUTORY_DEFAULT": service_months_as_of_2016 == 0
+      - CapBasis.STATUTORY_DEFAULT: service_months_as_of_2016 == 0
         -> 2016.1.1 이후 임용자, 경과조치 비대상 -> 본칙 36년 적용.
         (값은 STATUTORY_TIERED의 4호와 같지만 근거 조문이 다르다.)
-      - "DEFAULT_MAX": service_months_as_of_2016 미제공(None) -> 판정 불가.
+      - CapBasis.DEFAULT_MAX: service_months_as_of_2016 미제공(None) -> 판정 불가.
         기존 동작(일괄 36년) 유지를 위한 폴백.
 
     경계 판정은 월 단위 정수 비교로만 수행한다(연 단위 반올림 금지).
     """
     if service_months_as_of_2016 is None:
-        return DEFAULT_MAX_CAP_MONTHS, "DEFAULT_MAX"
+        return DEFAULT_MAX_CAP_MONTHS, CapBasis.DEFAULT_MAX
 
     if service_months_as_of_2016 < 0:
         raise ValueError("service_months_as_of_2016은 0 이상이어야 합니다.")
 
     if service_months_as_of_2016 == 0:
-        return DEFAULT_MAX_CAP_MONTHS, "STATUTORY_DEFAULT"
+        return DEFAULT_MAX_CAP_MONTHS, CapBasis.STATUTORY_DEFAULT
 
     for lower_bound_months, cap_months in _STATUTORY_TIERED_CAP_MONTHS:
         if service_months_as_of_2016 >= lower_bound_months:
-            return cap_months, "STATUTORY_TIERED"
+            return cap_months, CapBasis.STATUTORY_TIERED
 
     raise AssertionError("unreachable: 마지막 구간(1개월 이상)이 항상 매칭되어야 함")
