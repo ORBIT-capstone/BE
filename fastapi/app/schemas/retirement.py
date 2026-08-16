@@ -95,7 +95,14 @@ class ReductionResult(BaseModel):
 class ScenariosRequest(DiagnosisRequest):
     """진단(diagnosis)과 동일한 입력 스키마를 재사용하고 수령방식 계산에 필요한 필드를 추가"""
 
-    early_years: int = Field(default=5, ge=1, le=5)  # 조기수령 연수 (1~5년, 1년당 5% 감액)
+    early_years: float = Field(
+        default=5, gt=0, le=5,
+        description=(
+            "조기수령 미달연수(0 초과 5 이하, 소수 허용). 감액률은 연 단위 계단식(올림)으로 "
+            "1년당 5%씩 적용된다(예: 1.2년 -> 2년분 10% 감액). 5년 초과 미달은 조기수령 "
+            "대상이 아니다."
+        ),
+    )
     base_monthly_income: WonAmountInput = Field(gt=0)  # 기준소득월액 (원) - LUMP_SUM/SPLIT 공제일시금 산식에 사용
     total_service_years: int = Field(ge=10, le=100)  # 총 재직연수 - LUMP_SUM/SPLIT 공제일시금 산식에 사용
     deduction_years: int | None = Field(default=None, ge=0, le=26)  # SPLIT(분할수령) 공제연수
