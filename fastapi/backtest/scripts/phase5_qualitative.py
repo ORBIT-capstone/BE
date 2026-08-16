@@ -26,7 +26,6 @@ sys.path.insert(0, str(FASTAPI_ROOT))
 from app.services.retirement_service import (  # noqa: E402
     EARLY_REDUCTION_RATE_PER_YEAR,
     EARLY_YEARS_MAX,
-    EARLY_YEARS_MIN,
     MAX_DEDUCTION_YEARS,
     MIN_PENSION_YEARS,
 )
@@ -113,13 +112,19 @@ def compare_ab_distribution(df: pd.DataFrame) -> list[str]:
 
     lines.append("")
     lines.append(
-        f"**결함 기록**: 현재 엔진(`retirement_service.py`)은 조기수령 감액을 "
-        f"`monthly_pension * (1 - {EARLY_REDUCTION_RATE_PER_YEAR} * early_years)` 연속식으로 계산하며, "
-        f"`early_years`는 호출자가 직접 넘기는 정수({EARLY_YEARS_MIN}~{EARLY_YEARS_MAX})다. "
-        "정수 입력에 한해서는 결과값이 법정 계단식 감액률(1년 이내 95%, 1~2년 90%, 2~3년 85%, "
-        "3~4년 80%, 4~5년 75%)과 우연히 일치하지만, 코드 자체에는 '미달연수를 계단 구간에 매핑'하는 "
-        "로직이 없다 — 실제 미달연수(지급개시연령까지 남은 기간)를 정수 계단으로 변환하는 책임이 "
-        "엔진 밖(호출자)에 있고, 이 변환 로직은 이 코드베이스에 존재하지 않는다."
+        f"**[해결됨] 정정 및 조치**: 이전 버전은 조기수령 감액을 "
+        f"`monthly_pension * (1 - {EARLY_REDUCTION_RATE_PER_YEAR} * early_years)` 연속식으로 계산했다. "
+        "**정정**: 애초 서술('계단식 로직 부재')이 부정확했다 — `early_years`가 정수일 때 이 식은 "
+        "법정 계단식 감액률(1년 이내 95%, 1년 초과~2년 이내 90%, 2년 초과~3년 이내 85%, "
+        "3년 초과~4년 이내 80%, 4년 초과~5년 이내 75%)과 수치가 완전히 일치했다 — 계단 로직 자체가 "
+        "없었던 게 아니라, 소수 미달연수(예: 1.5년)를 입력하면 계단이 아니라 선형으로 처리돼 "
+        "실제 법정 감액률보다 작게 감액되는 문제였다. 정확한 원인은 '소수 미달연수 미대응 + "
+        "미달연수 정합성 검증 부재'다: 미달연수(지급개시연령까지 남은 기간)를 계산해 `early_years`로 "
+        "변환하는 로직이 엔진 밖(API 호출자)에 있었고, 그 변환값이 올바른지 엔진이 검증할 수 없었다. "
+        "**조치**: `_early_reduction_rate()`가 `EARLY_REDUCTION_RATE_PER_YEAR * ceil(early_years)`로 "
+        "계단식을 명시적으로 구현했다(정수 입력 시 결과 동일 — 회귀 테스트로 고정). "
+        "미달연수를 지급개시연령으로부터 서버가 직접 산정하는 기능은 여전히 스코프 밖이다 — "
+        "지급개시연령 유예 스케줄 확보 후 별도 이슈로 진행(scope_limitations.md 향후 과제 참조)."
     )
     lines.append("")
     return lines
