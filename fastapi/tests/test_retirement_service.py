@@ -5,6 +5,7 @@ from app.services import retirement_service
 from app.services.reduction_rules import get_reduction_rule
 from app.services.retirement_service import (
     EARLY_REDUCTION_RATE_PER_YEAR,
+    EARLY_YEARS_MAX,
     MAX_AGE,
     MAX_DEDUCTION_YEARS,
     MAX_REDUCTION_RATIO,
@@ -13,6 +14,7 @@ from app.services.retirement_service import (
     TARGET_AGE_FEMALE,
     TARGET_AGE_MALE,
     _calculate_lump_sum_and_pension,
+    _early_reduction_rate,
     _resolve_split_deduction_years,
     calculate_status,
     get_target_age,
@@ -603,3 +605,184 @@ def test_simulate_scenarios_lump_sum_and_installment_use_unified_formula():
     upfront_installment = installment_outcome.timeline[0].asset - 10_000
     assert upfront_installment == pytest.approx(expected_split_lump_sum)
     assert installment_outcome.timeline[0].annual_income == pytest.approx(expected_split_pension * 12)
+
+
+# --- Step 2: 조기수령 감액 - 경계값 및 회귀 테스트 ---
+
+
+@pytest.mark.parametrize("early_years", [0.0, EARLY_YEARS_MAX + 0.01, 6])
+def test_early_reduction_rate_out_of_range_raises(early_years):
+    with pytest.raises(ValueError):
+        simulate_scenarios(
+            current_age=60,
+            monthly_expenses=250,
+            monthly_pension=150,
+            asset=10_000,
+            gender="male",
+            base_monthly_income=300,
+            total_service_years=25,
+            early_years=early_years,
+        )
+
+
+@pytest.mark.parametrize("early_years", [1, EARLY_YEARS_MAX])
+def test_early_reduction_boundary_values_do_not_raise(early_years):
+    result = simulate_scenarios(
+        current_age=60,
+        monthly_expenses=250,
+        monthly_pension=150,
+        asset=10_000,
+        gender="male",
+        base_monthly_income=300,
+        total_service_years=25,
+        early_years=early_years,
+    )
+    early_outcome = next(o for o in result.scenarios if o.scenario_type == ScenarioType.EARLY)
+    expected_rate = EARLY_REDUCTION_RATE_PER_YEAR * early_years
+    expected_annual_income = 150 * (1 - expected_rate) * 12
+    assert early_outcome.timeline[0].annual_income == pytest.approx(expected_annual_income)
+
+
+@pytest.mark.parametrize("early_years", [1, 2, 3, 4, 5])
+def test_early_reduction_rate_matches_legacy_linear_formula_for_integer_input(early_years):
+    """회귀 테스트: 정수 early_years에 대해 새 계단식(ceil) 공식이 이전 선형식과
+    정확히 같은 결과를 내야 한다 — early_years는 정수일 때 ceil(early_years) ==
+    early_years이므로 항상 성립해야 한다."""
+    legacy_rate = EARLY_REDUCTION_RATE_PER_YEAR * early_years
+    assert _early_reduction_rate(early_years) == pytest.approx(legacy_rate)
+
+
+def test_early_reduction_rate_steps_up_for_fractional_years():
+    # 1.5년 미달 -> "1년 초과 2년 이내" 계단(2년치 5%=10%)로 올림
+    assert _early_reduction_rate(1.5) == pytest.approx(0.10)
+    # 정확히 1.0년 -> "1년 이내" 계단(5%) 유지
+    assert _early_reduction_rate(1.0) == pytest.approx(0.05)
+    # 4.9년 미달 -> "4년 초과 5년 이내" 계단(최대 25%)
+    assert _early_reduction_rate(4.9) == pytest.approx(0.25)
+
+
+# --- Step 1(c): LUMP_SUM/SPLIT 재직연수 상한 (이전에는 무제한이었던 결함) ---
+
+
+def test_calculate_lump_sum_and_pension_caps_service_years_at_36():
+    # total_service_years=40(상한 36년 초과), deduction_years=0
+    # -> pension_years는 min(40,36)-0 = 36 이어야 한다(40이 아니라).
+    _lump_sum, monthly_pension = _calculate_lump_sum_and_pension(
+        base_monthly_income=300,
+        total_service_years=40,
+        deduction_years=0,
+    )
+    from app.services.employees_service import PENSION_RATE
+
+    assert monthly_pension == pytest.approx(300 * 36 * PENSION_RATE)
+
+
+def test_calculate_lump_sum_and_pension_applies_cap_before_deduction_not_after():
+    # 캡을 공제 전에 적용해야 한다: min(40,36)-10 = 26.
+    # 만약 순서가 바뀌어 공제를 먼저 하면 (40-10)=30 -> min(30,36)=30 이 되어 다른 값이 나온다.
+    _lump_sum, monthly_pension = _calculate_lump_sum_and_pension(
+        base_monthly_income=300,
+        total_service_years=40,
+        deduction_years=10,
+    )
+    from app.services.employees_service import PENSION_RATE
+
+    correct_order_years = 26  # min(40, 36) - 10
+    wrong_order_years = 30  # (40 - 10), 이후 min(30,36)=30 (캡이 안 걸림)
+    assert monthly_pension == pytest.approx(300 * correct_order_years * PENSION_RATE)
+    assert monthly_pension != pytest.approx(300 * wrong_order_years * PENSION_RATE)
+
+
+def test_calculate_lump_sum_and_pension_under_cap_unaffected():
+    # 상한 이내(25년)에서는 기존 동작과 동일해야 한다 — 기존 골든 스냅샷/수기예시 테스트
+    # (test_calculate_lump_sum_and_pension_matches_manual_example)와 정합.
+    lump_sum, monthly_pension = _calculate_lump_sum_and_pension(
+        base_monthly_income=300,
+        total_service_years=30,
+        deduction_years=13,
+    )
+    assert lump_sum == pytest.approx(4132.05)
+    assert monthly_pension == pytest.approx(86.7)
+
+
+# --- 회귀 수정: 전액공제(LUMP_SUM) + 총재직연수>36년일 때 음수 pension_years 방지 ---
+
+
+def test_calculate_lump_sum_and_pension_full_deduction_over_cap_stays_zero():
+    # total_service_years=40(>36), deduction_years=40(전액공제) -> 캡을 일시금·연금
+    # 양쪽에 일관 적용해야 pension_years가 음수가 되지 않고 0을 유지해야 한다.
+    # 수정 전에는 min(40,36)-40 = -4로 음수가 나왔다(회귀).
+    _lump_sum, monthly_pension = _calculate_lump_sum_and_pension(
+        base_monthly_income=300,
+        total_service_years=40,
+        deduction_years=40,
+    )
+    assert monthly_pension == pytest.approx(0.0)
+
+
+def test_calculate_lump_sum_and_pension_full_deduction_over_cap_uses_capped_years_for_lump_sum():
+    # 공제일시금도 퇴직급여이므로 부칙 제11조 상한(36년)이 적용돼야 한다 —
+    # effective_deduction_years는 min(40,36)=36으로 캡된 값을 써야 한다.
+    lump_sum, _monthly_pension = _calculate_lump_sum_and_pension(
+        base_monthly_income=300,
+        total_service_years=40,
+        deduction_years=40,
+    )
+    from app.services.retirement_service import LUMP_SUM_CONVERSION_FACTOR, LUMP_SUM_SQUARE_FACTOR
+
+    expected = 300 * 36 * (LUMP_SUM_CONVERSION_FACTOR + LUMP_SUM_SQUARE_FACTOR * 36)
+    assert lump_sum == pytest.approx(expected)
+
+
+def test_simulate_scenarios_lump_sum_over_cap_matches_unified_formula():
+    # simulate_scenarios의 LUMP_SUM 시나리오(공제연수=총재직연수)가 total_service_years>36
+    # 케이스에서도 _calculate_lump_sum_and_pension과 정확히 같은 값을 내는지 확인
+    # (기존 test_simulate_scenarios_lump_sum_and_installment_use_unified_formula와 동일 성격).
+    total_service_years = 40
+    base_monthly_income = 300
+
+    result = simulate_scenarios(
+        current_age=60,
+        monthly_expenses=250,
+        monthly_pension=150,
+        asset=10_000,
+        gender="male",
+        base_monthly_income=base_monthly_income,
+        total_service_years=total_service_years,
+        deduction_years=None,
+    )
+
+    expected_lump_sum, expected_pension = _calculate_lump_sum_and_pension(
+        base_monthly_income, total_service_years, total_service_years
+    )
+    assert expected_pension == 0.0
+
+    lump_sum_outcome = next(o for o in result.scenarios if o.scenario_type == ScenarioType.LUMP_SUM)
+    upfront_lump = lump_sum_outcome.timeline[0].asset - 10_000
+    assert upfront_lump == pytest.approx(expected_lump_sum)
+    assert lump_sum_outcome.timeline[0].annual_income == pytest.approx(0.0)
+
+
+@pytest.mark.parametrize(
+    "total_service_years,deduction_years",
+    [
+        (30, 13),
+        (25, 25),
+        (25, 0),
+        (36, 36),  # 상한과 정확히 같은 경계값 — 캡이 걸리지 않는 경계
+    ],
+)
+def test_calculate_lump_sum_and_pension_under_or_at_cap_matches_uncapped_formula(
+    total_service_years, deduction_years
+):
+    """회귀 방지: total_service_years <= 36(상한)인 기존 케이스들은 캡 적용 여부와
+    무관하게 이전의 단순식(total_service_years - deduction_years)과 정확히 같아야 한다."""
+    from app.services.employees_service import PENSION_RATE
+
+    _lump_sum, monthly_pension = _calculate_lump_sum_and_pension(
+        base_monthly_income=300,
+        total_service_years=total_service_years,
+        deduction_years=deduction_years,
+    )
+    expected_pension_years = total_service_years - deduction_years
+    assert monthly_pension == pytest.approx(300 * expected_pension_years * PENSION_RATE)
