@@ -14,6 +14,7 @@ from app.schemas.retirement import (
 )
 from app.services.employees_service import LUMP_SUM_CONVERSION_FACTOR, PENSION_RATE
 from app.services.reduction_rules import calculate_bracket_reduction, get_reduction_rule
+from app.services.service_cap_rules import resolve_pension_service_cap_months
 
 INVESTMENT_RETURN = 0.03  # 자산 운용 수익률
 INFLATION_RATE = 0.02  # 물가상승률 (지출/Gap 증가율)
@@ -24,9 +25,8 @@ TARGET_AGE_FEMALE = 88  # 여성 목표연령 (통계청 생명표 60세 기대�
 SAVING_CAP_RATIO = 0.3  # 절약 상한 비율 (월 생활비 대비)
 SEARCH_PRECISION = 0.01  # 이진탐색 종료 정밀도 (만원)
 MAX_REDUCTION_RATIO = 0.5  # 감액 상한 비율 (노령연금액의 1/2 초과 감액 불가)
-EARLY_REDUCTION_RATE_PER_YEAR = 0.05  # 조기수령 1년당 감액률 (사학연금 조기노령연금 기준, 평생 적용)
-EARLY_YEARS_MIN = 1  # 조기수령 최소 연수
-EARLY_YEARS_MAX = 5  # 조기수령 최대 연수 (5년 조기수령 시 최대 25% 감액)
+EARLY_REDUCTION_RATE_PER_YEAR = 0.05  # 조기수령 미달연수 1년당 감액률 (사학연금 조기퇴직연금 기준, 평생 적용)
+EARLY_YEARS_MAX = 5  # 조기수령 최대 미달연수 (5년 초과는 조기수령 대상이 아님 -> 유효성 에러)
 LUMP_SUM_SQUARE_FACTOR = 65 / 10000  # 공제일시금 2차 계수 (공제연수 제곱 가산분, 사학연금공단 공제일시금 산식)
 MIN_PENSION_YEARS = 10  # 연금 선택 최소 연수 (공제일시금 일부 선택 시)
 MAX_DEDUCTION_YEARS = 26  # 공제일시금 선택 최대 연수
@@ -289,17 +289,35 @@ def _calculate_lump_sum_and_pension(
     공제일시금 = 기준소득월액 x 공제연수 x (LUMP_SUM_CONVERSION_FACTOR + LUMP_SUM_SQUARE_FACTOR x 공제연수)
     (사학연금공단 공식: 기준소득월액x(공제재직월수/12)x975/1000 + 기준소득월액x(공제재직월수/12)^2x65/10000)
 
-    연금 부분은 재직연수를 '연금 선택 연수'(=총재직연수-공제연수)로 치환해
-    employees_service의 기존 퇴직연금 산식(PENSION_RATE)을 그대로 재사용한다.
+    상한(재직기간 상한, 이 함수 내부에서는 항상 36년 — 아래 참조)을 총재직연수와
+    공제연수 양쪽에 일관되게 적용한다:
+      1. capped_service_years = min(총재직연수, 상한)
+      2. effective_deduction_years = min(공제연수, capped_service_years)
+         — 공제일시금도 퇴직급여이므로 부칙 제11조 상한이 적용된다. 이 캡이 없으면
+           총재직연수가 상한을 넘는 사람의 공제일시금만 상한을 벗어나 회귀가 생긴다
+           (아래 3번 불변식이 깨짐 — tests/test_retirement_service.py 참조).
+      3. 연금 선택 연수 = capped_service_years - effective_deduction_years (항상 >= 0)
+    이렇게 구한 연금 선택 연수로 employees_service의 기존 퇴직연금 산식(PENSION_RATE)을
+    그대로 재사용한다.
 
-    deduction_years == total_service_years(전액 공제)이면 연금 선택 연수가 0이 되어
-    monthly_pension=0, lump_sum은 곧 퇴직연금일시금(LUMP_SUM) 산식과 동일해진다 —
-    LUMP_SUM/SPLIT(분할) 두 시나리오 모두 이 함수 하나로 계산한다(중복 계산 없음).
+    ScenariosRequest에는 2016.1.1 시점 재직기간 입력이 없으므로 여기서는 항상
+    resolve_pension_service_cap_months(None) -> 본칙 36년(cap_basis=DEFAULT_MAX)을
+    적용한다. 이전에는 이 상한 자체가 없어 total_service_years(최대 100년, 스키마
+    제약)가 그대로 연금 선택 연수 계산에 들어갔다 — 확정 결함이었다(engine_defects.md).
+
+    deduction_years == total_service_years(전액 공제)이면 연금 선택 연수가 항상 0이
+    되어(총재직연수가 상한을 넘어도 effective_deduction_years가 함께 캡되므로) monthly_pension=0을
+    유지하며, lump_sum은 곧 퇴직연금일시금(LUMP_SUM) 산식과 동일해진다 — LUMP_SUM/SPLIT
+    (분할) 두 시나리오 모두 이 함수 하나로 계산한다(중복 계산 없음).
     """
-    lump_sum = base_monthly_income * deduction_years * (
-        LUMP_SUM_CONVERSION_FACTOR + LUMP_SUM_SQUARE_FACTOR * deduction_years
+    cap_months, _cap_basis = resolve_pension_service_cap_months(None)
+    capped_service_years = min(total_service_years, cap_months / 12)
+    effective_deduction_years = min(deduction_years, capped_service_years)
+
+    lump_sum = base_monthly_income * effective_deduction_years * (
+        LUMP_SUM_CONVERSION_FACTOR + LUMP_SUM_SQUARE_FACTOR * effective_deduction_years
     )
-    pension_years = total_service_years - deduction_years
+    pension_years = capped_service_years - effective_deduction_years
     monthly_pension = base_monthly_income * pension_years * PENSION_RATE
     return lump_sum, monthly_pension
 
@@ -350,6 +368,18 @@ def _calculate_break_even_age(
     return None
 
 
+def _early_reduction_rate(early_years: float) -> float:
+    """조기수령 미달연수(early_years, 소수 허용)에 대한 감액률.
+
+    사학연금 조기퇴직연금 감액표(연 단위 계단식): 1년 이내 5%, 1년 초과~2년 이내
+    10%, 2년 초과~3년 이내 15%, 3년 초과~4년 이내 20%, 4년 초과~5년 이내 25%.
+    즉 감액률 = EARLY_REDUCTION_RATE_PER_YEAR x ceil(early_years) — 정수를 넣으면
+    이전 버전의 선형식(EARLY_REDUCTION_RATE_PER_YEAR x early_years)과 결과가
+    같다(정수는 자기 자신의 올림과 같으므로).
+    """
+    return EARLY_REDUCTION_RATE_PER_YEAR * math.ceil(early_years)
+
+
 def simulate_scenarios(
     current_age: int,
     monthly_expenses: float,
@@ -358,7 +388,7 @@ def simulate_scenarios(
     gender: Gender,
     base_monthly_income: float,
     total_service_years: int,
-    early_years: int = EARLY_YEARS_MAX,
+    early_years: float = EARLY_YEARS_MAX,
     deduction_years: int | None = None,
 ) -> ScenariosResult:
     """정상/조기/일시금/분할 4가지 연금 수령방식을 diagnose_core()에 파라미터만 바꿔
@@ -369,9 +399,20 @@ def simulate_scenarios(
     기준소득월액(base_monthly_income)·총재직연수(total_service_years) 기반
     공제일시금 산식(_calculate_lump_sum_and_pension)으로 재계산한다.
     총 수령액은 모든 시나리오에 대해 동일하게 current_age~MAX_AGE 기간으로 합산한다.
+
+    early_years(미달연수)는 소수를 허용한다 — 감액률은 연 단위 계단식(올림)으로
+    _early_reduction_rate()가 계산하며, 정수를 넣으면 이전 버전(선형식)과 동일한
+    결과를 낸다(회귀 테스트로 고정, tests/test_retirement_service.py 참조).
+
+    TODO(스코프 밖): 미달연수를 "법정 지급개시연령 - 실제 수령개시연령"으로
+    서버가 직접 산정하는 기능은 이번 트랙에 포함하지 않았다. 지급개시연령은
+    사학연금법령 개정사항(2016.1.1, 4항)에 따라 퇴직연도별로 60~65세까지
+    단계적으로 연장되는 별도 표가 필요하다 — 확보 후 별도 이슈로 진행
+    (backtest/reports/scope_limitations.md 향후 과제 참조). 현재는 호출자가
+    early_years를 직접 산정해 넘겨야 한다.
     """
-    if not (EARLY_YEARS_MIN <= early_years <= EARLY_YEARS_MAX):
-        raise ValueError(f"early_years는 {EARLY_YEARS_MIN}~{EARLY_YEARS_MAX} 사이여야 합니다.")
+    if not (0 < early_years <= EARLY_YEARS_MAX):
+        raise ValueError(f"early_years는 0보다 크고 {EARLY_YEARS_MAX} 이하여야 합니다.")
     if total_service_years <= 0:
         raise ValueError("total_service_years는 0보다 커야 합니다.")
 
@@ -388,7 +429,7 @@ def simulate_scenarios(
 
     scenario_inputs: dict[ScenarioType, tuple[float, float]] = {
         ScenarioType.NORMAL: (monthly_pension, asset),
-        ScenarioType.EARLY: (monthly_pension * (1 - EARLY_REDUCTION_RATE_PER_YEAR * early_years), asset),
+        ScenarioType.EARLY: (monthly_pension * (1 - _early_reduction_rate(early_years)), asset),
         ScenarioType.LUMP_SUM: (full_pension, asset + full_lump_sum),
         ScenarioType.INSTALLMENT: (split_pension, asset + split_lump_sum),
     }
