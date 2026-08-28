@@ -10,6 +10,7 @@ from fastapi.responses import JSONResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from app.schemas.errors import ErrorDetail, ErrorResponse
+from app.exceptions import DataSourceError, DomainValidationError
 
 _PYDANTIC_ERROR_MESSAGES: dict[str, str] = {
     "missing": "필수 항목입니다.",
@@ -58,6 +59,16 @@ def _error_code_for_status(status_code: int) -> str:
 
 
 def register_error_handlers(app: FastAPI) -> None:
+    @app.exception_handler(DomainValidationError)
+    async def _handle_domain_validation_error(request: Request, exc: DomainValidationError) -> JSONResponse:
+        body = ErrorResponse(code="INVALID_INPUT", message=str(exc), details=[])
+        return JSONResponse(status_code=400, content=body.model_dump(mode="json"))
+
+    @app.exception_handler(DataSourceError)
+    async def _handle_data_source_error(request: Request, exc: DataSourceError) -> JSONResponse:
+        body = ErrorResponse(code="DATA_SOURCE_ERROR", message=str(exc), details=[])
+        return JSONResponse(status_code=500, content=body.model_dump(mode="json"))
+
     @app.exception_handler(RequestValidationError)
     async def _handle_validation_error(request: Request, exc: RequestValidationError) -> JSONResponse:
         details = [

@@ -40,4 +40,22 @@ class FastApiDiagnosisResponseTest {
 
 		assertThrows(IllegalArgumentException.class, () -> FastApiDiagnosisResponse.from(node));
 	}
+
+	@Test
+	void rejectsInvalidTimelineContract() throws Exception {
+		var node = objectMapper.readTree("""
+			{"current_age":60,"monthly_gap":1000000,"depletion_age":null,"depleted":false,
+			 "target_age":84,"status":"SUFFICIENT","timeline":[{"age":60,"asset":"invalid"}]}
+			""");
+		assertThrows(IllegalArgumentException.class, () -> FastApiDiagnosisResponse.from(node));
+	}
+
+	@Test
+	void rejectsUnknownStatus() throws Exception {
+		var node = objectMapper.readTree("""
+			{"current_age":60,"monthly_gap":1000000,"depletion_age":null,"depleted":false,
+			 "target_age":84,"status":"UNKNOWN","timeline":[]}
+			""");
+		assertThrows(IllegalArgumentException.class, () -> FastApiDiagnosisResponse.from(node));
+	}
 }
