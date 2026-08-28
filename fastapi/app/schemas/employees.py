@@ -1,8 +1,9 @@
 from pydantic import BaseModel, Field, model_validator
 
+from app.services.pension_rate_model import JobType, SchoolLevel
 from app.services.service_cap_rules import CapBasis
 
-__all__ = ["CapBasis", "SimulateRequest", "SimulateResponse"]
+__all__ = ["CapBasis", "JobType", "SchoolLevel", "SimulateRequest", "SimulateResponse"]
 
 
 class SimulateRequest(BaseModel):
@@ -24,6 +25,20 @@ class SimulateRequest(BaseModel):
             "기록돼 있다. 0=2016.1.1 이후 임용(경과조치 비대상, 본칙 36년), 양수=경과조치 표 "
             "적용, None(미제공)=판정 불가로 기존 동작(36년) 유지."
         ),
+    )
+    school_level: SchoolLevel | None = Field(
+        default=None,
+        description=(
+            "학교급(옵셔널). job_type과 **함께** 주어질 때만 연금 지급률의 집단 보정에 "
+            "쓰인다 — 둘 중 하나만 주면 무시된다. 사학연금공단 실적 데이터에서 학교급x직구분 "
+            "집단 간 실효 지급률이 최대 ±5% 차이를 보였고, 이 두 값을 함께 주면 백테스트 "
+            "구간 적중률이 78.1%에서 80.4%로 오른다(5-fold 교차검증). 상세는 "
+            "app/services/pension_rate_model.py 참조."
+        ),
+    )
+    job_type: JobType | None = Field(
+        default=None,
+        description="직구분(옵셔널). school_level과 함께 주어질 때만 지급률 집단 보정에 쓰인다.",
     )
 
     @model_validator(mode="after")

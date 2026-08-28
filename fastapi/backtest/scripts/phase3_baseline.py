@@ -28,11 +28,11 @@ BACKTEST_DIR = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(BACKTEST_DIR / "scripts"))
 
 from engine_baseline import (  # noqa: E402
+    LEGACY_PENSION_RATE,
+    LEGACY_SERVICE_YEARS_CAP,
     PENSION_ELIGIBILITY_MONTHS,
-    SERVICE_YEARS_CAP,
-    predict_monthly_pension,
+    predict_monthly_pension_legacy,
 )
-from engine_baseline import PENSION_RATE  # noqa: E402
 from interval_utils import is_hit  # noqa: E402
 
 CLEAN_FILE = BACKTEST_DIR / "data" / "clean" / "backtest_clean.parquet"
@@ -94,7 +94,7 @@ def main() -> None:
     a = a_with_income[a_with_income["연금월액_구분"] != 0].copy()
 
     a["predicted"] = [
-        predict_monthly_pension(income, months)
+        predict_monthly_pension_legacy(income, months)
         for income, months in zip(a["평균기준소득월액"], a["재직월수"])
     ]
     a["hit"] = is_hit(a["predicted"], a["연금월액_하한"], a["연금월액_상한"])
@@ -134,9 +134,12 @@ def main() -> None:
     )
     lines.append("")
     lines.append(
-        "예측식: `fastapi/app/services/employees_service.py`의 `simulate_employees` 산식을 그대로 재현 "
-        f"(PENSION_RATE={PENSION_RATE}, 재직연수 상한 {SERVICE_YEARS_CAP}년 캡, 최소가입월수 {PENSION_ELIGIBILITY_MONTHS}개월). "
-        "상수는 재타이핑하지 않고 모듈에서 import했다."
+        f"예측식: **개선 전** 엔진 산식(단일 지급률 {LEGACY_PENSION_RATE}, 재직연수 상한 "
+        f"{LEGACY_SERVICE_YEARS_CAP}년 일괄 캡, 최소가입월수 {PENSION_ELIGIBILITY_MONTHS}개월). "
+        "이 리포트는 개선 전 상태를 고정 기록하는 것이므로, 프로덕션 코드를 import하지 않고 "
+        "`backtest/scripts/engine_baseline.py`에 동결한 legacy 상수를 쓴다 — 프로덕션이 "
+        "바뀌어도 이 수치는 변하지 않아야 하기 때문이다. **개선 후 수치는 "
+        "`calibration_report.md`를 볼 것.**"
     )
     lines.append("")
     lines.append("## 전체 지표")
