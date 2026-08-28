@@ -36,14 +36,23 @@ for label, retire_year, retire_age, service_years in PROFILES:
         HYPOTHETICAL_INCOME, retire_yyyymm, service_years * 12
     )
 
-    diff = pension_30p - pension_tranche
-    pct = diff / pension_tranche * 100
-    rows.append((label, pension_30p, pension_tranche, diff, pct))
+    # pct_vs_30p: tranche+α가 30-파라미터 모형보다 몇 % 높게(양수)/낮게(음수) 예측하는가.
+    # (30p - tranche)처럼 방향을 반대로 잡으면 표를 읽을 때 부호가 직관과 어긋나므로
+    # "채택 모형이 기준 대비 얼마나 높은가"로 고정한다.
+    pct_vs_30p = (pension_tranche - pension_30p) / pension_30p * 100
+    rows.append((label, pension_30p, pension_tranche, pct_vs_30p))
 
-lines = ["| 프로필 | 30-파라미터 모형 월연금(원) | tranche+α 월연금(원) | 차이(30p-tranche) | 차이율 |",
-         "|:---|---:|---:|---:|---:|"]
-for label, p30, ptr, diff, pct in rows:
-    lines.append(f"| {label} | {p30:,} | {ptr:,} | {diff:,} | {pct:.1f}% |")
+lines = [
+    "| 프로필 | 30-파라미터 모형 월연금(원) | tranche+α 월연금(원) | tranche+α가 30-파라미터보다 몇 % 높은가 |",
+    "|:---|---:|---:|---:|",
+]
+for label, p30, ptr, pct in rows:
+    lines.append(f"| {label} | {p30:,} | {ptr:,} | {pct:+.1f}% |")
+lines.append("")
+lines.append(
+    "마지막 열 = (tranche+α - 30-파라미터) / 30-파라미터 x 100. 양수는 tranche+α가 "
+    "더 높게, 음수는 더 낮게 예측한다는 뜻이다."
+)
 out = Path(__file__).parent / "future_extrapolation_result.md"
 out.write_text("\n".join(lines), encoding="utf-8")
 print("written", out)

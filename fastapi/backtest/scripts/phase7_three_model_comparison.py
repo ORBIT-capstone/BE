@@ -53,38 +53,56 @@ def main() -> None:
     a = a.reset_index(drop=True)
     n = len(a)
 
-    tm = decompose_tranche_months(a["추정임용연월"], a["재직월수"])
-    assert (tm.sum(axis=1) == a["재직월수"]).all()
+    # tier1_evaluation.md/defect_fix_comparison.md가 쓴 표본(재직월수_상한도달여부==True인
+    # 행 — 상한 절단 가능성이 있어 추정임용연월을 신뢰할 수 없는 행 — 을 제외한 subsample).
+    # 본문 지표는 전체 A 표본으로 내되, 이 subsample에서 baseline/법정tranche를 다시 재보고
+    # 과거 리포트 수치(46.01%/35.00%)와 정확히 일치하는지 확인한다 — 두 리포트가 서로
+    # 다른 숫자를 인용하는 것처럼 보이는 원인이 계산 오류가 아니라 표본 정의 차이임을
+    # 코드로 증명한다.
+    a_decomposable = a[~a["재직월수_상한도달여부"]].copy().reset_index(drop=True)
 
-    yr_pre = tm["pre_2010"].to_numpy(float) / 12
-    yr_1015 = tm["y2010_2015"].to_numpy(float) / 12
-    post_rate_years = np.zeros(n)  # sum(연도별 확정요율 x 개월수/12), 2016년 이후, α 무관
-    for c in TRANCHE_COLUMNS:
-        if c in ("pre_2010", "y2010_2015"):
-            continue
-        year = int(c[1:]) if c != "y2036_plus" else 2036
-        rate = PENSION_RATE_BY_YEAR.get(year, 0.017)
-        post_rate_years += tm[c].to_numpy(float) / 12 * rate
+    def tranche_components(sub: pd.DataFrame) -> dict[str, np.ndarray]:
+        """법정 tranche 분해 결과를 이 스크립트가 쓰는 형태(C, COEF)로 변환한다.
+        C + COEF*alpha 가 예측 연금월액이다(alpha=1이면 법정 tranche 그대로, α로
+        스케일하면 tranche+α).
+        """
+        tm_ = decompose_tranche_months(sub["추정임용연월"], sub["재직월수"])
+        assert (tm_.sum(axis=1) == sub["재직월수"]).all()
+        yr_pre_ = tm_["pre_2010"].to_numpy(float) / 12
+        yr_1015_ = tm_["y2010_2015"].to_numpy(float) / 12
+        post_ = np.zeros(len(sub))
+        for c in TRANCHE_COLUMNS:
+            if c in ("pre_2010", "y2010_2015"):
+                continue
+            year_ = int(c[1:]) if c != "y2036_plus" else 2036
+            post_ += tm_[c].to_numpy(float) / 12 * PENSION_RATE_BY_YEAR.get(year_, 0.017)
+        inc_ = sub["평균기준소득월액"].to_numpy(float)
+        return {
+            "inc": inc_,
+            "yrs": sub["재직연수"].to_numpy(float),
+            "lo": sub["연금월액_하한"].to_numpy(float),
+            "hi": sub["연금월액_상한"].to_numpy(float),
+            "code": sub["연금월액_구분"].to_numpy(int),
+            "cl_mask": sub["연금월액_구분"].between(1, 7).to_numpy(bool),
+            "C": inc_ * (RATE_2010_2015 * yr_1015_ + post_),
+            "COEF": inc_ * RATE_PRE_2010 * yr_pre_,
+        }
 
-    inc = a["평균기준소득월액"].to_numpy(float)
-    yrs = a["재직연수"].to_numpy(float)
-    lo = a["연금월액_하한"].to_numpy(float)
-    hi = a["연금월액_상한"].to_numpy(float)
-    code = a["연금월액_구분"].to_numpy(int)
-    cl_mask = a["연금월액_구분"].between(1, 7).to_numpy(bool)
-
-    C = inc * (RATE_2010_2015 * yr_1015 + post_rate_years)  # α와 무관한 부분
-    COEF = inc * RATE_PRE_2010 * yr_pre  # alpha에 곱해지는 부분 (>=0)
+    comp = tranche_components(a)
+    inc, yrs, lo, hi, code, cl_mask = comp["inc"], comp["yrs"], comp["lo"], comp["hi"], comp["code"], comp["cl_mask"]
+    C, COEF = comp["C"], comp["COEF"]
 
     def pred_code_of(p: np.ndarray) -> np.ndarray:
-        pc = np.zeros(n, dtype=int)
+        pc = np.zeros(len(p), dtype=int)
         for k in range(1, 9):
             lo_k = CODE_LO_MANWON[k] * WON
             hi_k = CODE_HI_MANWON[k] * WON if np.isfinite(CODE_HI_MANWON[k]) else np.inf
             pc[(p >= lo_k) & (p < hi_k)] = k
         return pc
 
-    def metrics(p: np.ndarray, sel: np.ndarray) -> dict[str, float]:
+    def metrics(
+        p: np.ndarray, sel: np.ndarray, lo: np.ndarray, hi: np.ndarray, code: np.ndarray, cl_mask: np.ndarray
+    ) -> dict[str, float]:
         hit = (p >= lo) & (p < hi)
         near = np.abs(pred_code_of(p) - code) <= 1
         miss = sel & ~hit
@@ -99,14 +117,17 @@ def main() -> None:
             "under": under,
         }
 
-    def best_alpha(sel: np.ndarray, amin: float = 0.0, amax: float = 3.0) -> tuple[float, float, float]:
+    def best_alpha(
+        sel: np.ndarray, coef_full: np.ndarray, c_full: np.ndarray, lo_full: np.ndarray, hi_full: np.ndarray,
+        amin: float = 0.0, amax: float = 3.0,
+    ) -> tuple[float, float, float]:
         """적중 지시함수가 alpha에 선형이므로 스위프라인으로 전역 최적 구간을 구한다.
 
         적중 개수는 alpha의 계단함수라 최적값이 보통 구간(플래토)을 이룬다 — 그
         구간 안의 어떤 alpha를 골라도 정확히 같은 적중 개수를 낸다. 반환값은
         (플래토 좌끝, 플래토 우끝, 그 구간에서의 최대 적중 개수)다.
         """
-        coef, c, l, h = COEF[sel], C[sel], lo[sel], hi[sel]
+        coef, c, l, h = coef_full[sel], c_full[sel], lo_full[sel], hi_full[sel]
         n_const_hit = int(((c >= l) & (c < h))[coef == 0].sum())
         nonzero = coef != 0
         coef2, c2, l2, h2 = coef[nonzero], c[nonzero], l[nonzero], h[nonzero]
@@ -142,22 +163,22 @@ def main() -> None:
     alpha_by_fold = []
 
     # baseline: 파라미터 없음 — fold마다 동일. 참고용으로만 fold 평균을 낸다.
-    fold_metrics = [metrics(p_baseline, fold == f) for f in range(N_FOLDS)]
+    fold_metrics = [metrics(p_baseline, fold == f, lo, hi, code, cl_mask) for f in range(N_FOLDS)]
     rows_cv.append(("baseline (0.017 상수, 재직연수 상한 36년 일괄)", fold_metrics, None))
 
-    fold_metrics = [metrics(p_tranche1, fold == f) for f in range(N_FOLDS)]
+    fold_metrics = [metrics(p_tranche1, fold == f, lo, hi, code, cl_mask) for f in range(N_FOLDS)]
     rows_cv.append(("법정 tranche (α=1, 보정 없음)", fold_metrics, None))
 
     fold_metrics = []
     for f in range(N_FOLDS):
         te = fold == f
-        a_lo, a_hi, _best_n = best_alpha(fold != f)
+        a_lo, a_hi, _best_n = best_alpha(fold != f, COEF, C, lo, hi)
         a_hat = (a_lo + a_hi) / 2  # 플래토 구간의 중점 — 구간 내 어느 값을 써도 학습 fold 적중 개수는 동일
         alpha_by_fold.append(a_hat)
-        fold_metrics.append(metrics(COEF * a_hat + C, te))
+        fold_metrics.append(metrics(COEF * a_hat + C, te, lo, hi, code, cl_mask))
     rows_cv.append(("tranche+α (fold별 재적합)", fold_metrics, alpha_by_fold))
 
-    alpha_lo_full, alpha_hi_full, alpha_best_n_full = best_alpha(np.ones(n, dtype=bool))
+    alpha_lo_full, alpha_hi_full, alpha_best_n_full = best_alpha(np.ones(n, dtype=bool), COEF, C, lo, hi)
     alpha_full = (alpha_lo_full + alpha_hi_full) / 2
 
     def agg(fold_metrics: list[dict[str, float]], key: str) -> tuple[float, float]:
@@ -234,13 +255,76 @@ def main() -> None:
     )
     emit("")
 
+    all_sel = np.ones(n, dtype=bool)
+    m_base = metrics(p_baseline, all_sel, lo, hi, code, cl_mask)
+    m_tranche1 = metrics(p_tranche1, all_sel, lo, hi, code, cl_mask)
+
+    emit("## 정합성 확인 — 이전 리포트(defect_fix_comparison.md/tier1_evaluation.md)와의 관계")
+    emit("")
+    emit(
+        f"이전 리포트는 baseline 46.01% / 법정 tranche(Tier 1) 35.00%를 보고했는데(둘 다 "
+        f"n={len(a_decomposable):,}, tranche 분해 대상 subsample 기준), 이번 문서의 본문·부록은 "
+        f"baseline {m_base['exact']:.2f}% / 법정tranche(α=1) {m_tranche1['exact']:.2f}%"
+        f"(전체 A 표본 n={n:,} 기준)를 보고한다. **같은 산식에 다른 숫자가 존재하는 것처럼 "
+        "보이지만, 계산이 다른 것이 아니라 채점 표본(분모)이 다르다** — 아래에서 이전 "
+        "리포트와 정확히 같은 표본으로 다시 계산해 그 값을 재현함으로써 확인한다."
+    )
+    emit("")
+    comp_sub = tranche_components(a_decomposable)
+    inc_s, yrs_s, lo_s, hi_s = comp_sub["inc"], comp_sub["yrs"], comp_sub["lo"], comp_sub["hi"]
+    code_s, cl_mask_s = comp_sub["code"], comp_sub["cl_mask"]
+    C_s, COEF_s = comp_sub["C"], comp_sub["COEF"]
+    p_baseline_s = inc_s * np.minimum(yrs_s, LEGACY_SERVICE_YEARS_CAP) * LEGACY_PENSION_RATE
+    p_tranche1_s = COEF_s * 1.0 + C_s
+    all_sel_s = np.ones(len(a_decomposable), dtype=bool)
+    m_base_s = metrics(p_baseline_s, all_sel_s, lo_s, hi_s, code_s, cl_mask_s)
+    m_tranche1_s = metrics(p_tranche1_s, all_sel_s, lo_s, hi_s, code_s, cl_mask_s)
+    emit(
+        f"- 표본을 tranche 분해 대상 subsample(재직월수_상한도달여부==False, n={len(a_decomposable):,})로 "
+        f"좁히면: baseline = {m_base_s['exact']:.2f}%, 법정tranche(α=1) = {m_tranche1_s['exact']:.2f}%"
+    )
+    PREV_BASELINE_SUBSAMPLE = 46.01
+    PREV_TRANCHE1_SUBSAMPLE = 35.00
+    assert abs(m_base_s["exact"] - PREV_BASELINE_SUBSAMPLE) < 0.01, (
+        f"subsample baseline({m_base_s['exact']:.2f}%)이 이전 리포트 값({PREV_BASELINE_SUBSAMPLE}%)과 "
+        "어긋난다 — 표본 정의가 실제로 같은지 다시 확인할 것."
+    )
+    assert abs(m_tranche1_s["exact"] - PREV_TRANCHE1_SUBSAMPLE) < 0.01, (
+        f"subsample 법정tranche({m_tranche1_s['exact']:.2f}%)가 이전 리포트 값"
+        f"({PREV_TRANCHE1_SUBSAMPLE}%)과 어긋난다 — 표본 정의가 실제로 같은지 다시 확인할 것."
+    )
+    emit(
+        f"- 이전 리포트 값(baseline {PREV_BASELINE_SUBSAMPLE}%, 법정tranche {PREV_TRANCHE1_SUBSAMPLE}%)과 "
+        "소수점 둘째 자리까지 정확히 일치함을 이 스크립트가 assert로 확인했다 — **계산이 어긋난 것이 "
+        "아니라 표본 선택의 차이였다.**"
+    )
+    emit(
+        "- **본 리포트가 전체 A 표본(n=40,719)을 본문 지표로 쓰는 이유**: 프로덕션 "
+        "`/api/employees/simulate`는 실제 서비스 시점에 어떤 사용자가 법정 상한에 걸릴지 "
+        "미리 알 수 없다 — 상한 절단 가능 여부로 표본을 미리 골라 평가하면 실제 서비스 "
+        "모집단과 다른 부분집합만 검증하는 셈이다. 다만 그 결과 tranche 분해(재직기간을 "
+        "연도별로 나누는 것)에 쓰는 `추정임용연월`이 상한 절단 가능 행(전체의 49.14%)에서는 "
+        "부정확할 수 있다는 한계(`scope_limitations.md` §2)를 그대로 안고 간다 — 아래 α "
+        "민감도가 그 영향의 크기다."
+    )
+    emit("")
+    alpha_lo_sub, alpha_hi_sub, _ = best_alpha(all_sel_s, COEF_s, C_s, lo_s, hi_s)
+    alpha_sub = (alpha_lo_sub + alpha_hi_sub) / 2
+    emit(
+        f"- **α의 표본 민감도**: 전체 A 표본으로 적합하면 α={alpha_full:.4f}"
+        f"(구간 [{alpha_lo_full:.4f}, {alpha_hi_full:.4f}]), tranche 분해 대상 subsample만으로 "
+        f"적합하면 α={alpha_sub:.4f}(구간 [{alpha_lo_sub:.4f}, {alpha_hi_sub:.4f}])다 — 차이는 "
+        f"약 {abs(alpha_full - alpha_sub):.3f}(5-fold 교차검증 fold 간 표준편차 0.0012보다 크다). "
+        "표본 선택이 fold 노이즈보다 큰 영향을 준다는 뜻이며, 프로덕션 상수는 앞서 설명한 "
+        "이유로 전체 A 표본 값을 채택했다 — 이 민감도 자체를 한계로 §e에 기록한다."
+    )
+    emit("")
+
     emit("## 부록 — in-sample(전수 재적합) 수치")
     emit("")
     emit(header)
     emit(sep)
-    m_base = metrics(p_baseline, np.ones(n, dtype=bool))
-    m_tranche1 = metrics(p_tranche1, np.ones(n, dtype=bool))
-    m_alpha = metrics(COEF * alpha_full + C, np.ones(n, dtype=bool))
+    m_alpha = metrics(COEF * alpha_full + C, all_sel, lo, hi, code, cl_mask)
     for label, m in (
         ("baseline (0.017 상수)", m_base),
         ("법정 tranche (α=1)", m_tranche1),
