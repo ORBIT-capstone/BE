@@ -8,24 +8,30 @@
 
 import json
 from pathlib import Path
+from unittest.mock import patch
 
 from fastapi.testclient import TestClient
 
 from app.main import app
-from tests.test_golden_snapshots import CASES
+from tests.test_golden_snapshots import CASES, _FixedDate
 
-client = TestClient(app)
 OUT_DIR = Path(__file__).parent
 
-for case in CASES:
-    response = client.post(case["path"], json=case["body"])
-    fixture = {
-        "status_code": response.status_code,
-        "body": response.json(),
-    }
-    out_path = OUT_DIR / f"{case['name']}.json"
-    out_path.write_text(
-        json.dumps(fixture, ensure_ascii=False, indent=2, sort_keys=True) + "\n",
-        encoding="utf-8",
-    )
-    print(f"wrote {out_path}")
+# test_golden_snapshots.py의 _freeze_today 픽스처와 동일한 고정 날짜를 써야 한다 —
+# 그러지 않으면 여기서 생성한 픽스처와 테스트가 기대하는 값이 어긋난다.
+with patch("app.services.employees_service.date", _FixedDate), patch(
+    "app.services.retirement_service.date", _FixedDate
+):
+    client = TestClient(app)
+    for case in CASES:
+        response = client.post(case["path"], json=case["body"])
+        fixture = {
+            "status_code": response.status_code,
+            "body": response.json(),
+        }
+        out_path = OUT_DIR / f"{case['name']}.json"
+        out_path.write_text(
+            json.dumps(fixture, ensure_ascii=False, indent=2, sort_keys=True) + "\n",
+            encoding="utf-8",
+        )
+        print(f"wrote {out_path}")

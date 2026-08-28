@@ -1,4 +1,5 @@
 import math
+from datetime import date
 
 from app.schemas.retirement import (
     Gender,
@@ -12,7 +13,8 @@ from app.schemas.retirement import (
     SimulationResult,
     TimelinePoint,
 )
-from app.services.employees_service import LUMP_SUM_CONVERSION_FACTOR, PENSION_RATE
+from app.services.employees_service import LUMP_SUM_CONVERSION_FACTOR
+from app.services.pension_rate_model import calculate_monthly_pension_tranche
 from app.services.reduction_rules import calculate_bracket_reduction, get_reduction_rule
 from app.services.service_cap_rules import resolve_pension_service_cap_months
 
@@ -297,8 +299,20 @@ def _calculate_lump_sum_and_pension(
            총재직연수가 상한을 넘는 사람의 공제일시금만 상한을 벗어나 회귀가 생긴다
            (아래 3번 불변식이 깨짐 — tests/test_retirement_service.py 참조).
       3. 연금 선택 연수 = capped_service_years - effective_deduction_years (항상 >= 0)
-    이렇게 구한 연금 선택 연수로 employees_service의 기존 퇴직연금 산식(PENSION_RATE)을
-    그대로 재사용한다.
+    이렇게 구한 연금 선택 연수에 pension_rate_model의 법정 tranche+α 지급률
+    모형을 적용한다 — /api/employees/simulate와 같은 모형을 써서 두 엔드포인트가
+    같은 사람에게 서로 다른 연금월액을 내놓지 않도록 한다.
+
+    ScenariosRequest는 "지금 퇴직하는" 사람을 다룬다(총재직연수·기준소득월액을
+    현재 시점 값으로 입력받고 미래 퇴직연령 필드가 없다) — 따라서 퇴직연월은
+    오늘로 취급한다. tranche 요율은 퇴직연월 직전 개월수를 연도별로 나눠 적용하므로
+    (pension_rate_model 참조), 공제로 줄어든 "연금 선택 연수"는 **전체 재직기간 중
+    퇴직에 가장 가까운 후반부**로 간주한다 — 즉 일시금으로 전환되는 공제연수가
+    경력 초반부를 차지하고, 연금으로 남는 기간이 퇴직 직전 구간을 차지한다는
+    가정이다. 어느 쪽이 공제되는지는 법령에 명시된 배분 규칙이 없어 확인할 수
+    없는 가정임을 밝혀 둔다(연금 선택 연수가 짧을수록 이 가정이 결과에 미치는
+    영향도 작아진다 — 최근 tranche일수록 법정 요율이 낮아 이 가정이 과대추정
+    방향으로 작용하지는 않는다).
 
     ScenariosRequest에는 2016.1.1 시점 재직기간 입력이 없으므로 여기서는 항상
     resolve_pension_service_cap_months(None) -> 본칙 36년(cap_basis=DEFAULT_MAX)을
@@ -318,7 +332,10 @@ def _calculate_lump_sum_and_pension(
         LUMP_SUM_CONVERSION_FACTOR + LUMP_SUM_SQUARE_FACTOR * effective_deduction_years
     )
     pension_years = capped_service_years - effective_deduction_years
-    monthly_pension = base_monthly_income * pension_years * PENSION_RATE
+    today_yyyymm = date.today().year * 100 + date.today().month
+    monthly_pension = calculate_monthly_pension_tranche(
+        base_monthly_income, today_yyyymm, round(pension_years * 12)
+    )
     return lump_sum, monthly_pension
 
 

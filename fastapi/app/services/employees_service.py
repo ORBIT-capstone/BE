@@ -1,9 +1,11 @@
+from datetime import date
+
 from app.repositories.employees_income_repository import get_band_mean
 from app.schemas.employees import SimulateRequest, SimulateResponse
+from app.services.pension_rate_model import calculate_monthly_pension_tranche, yyyymm_after_months
 from app.services.service_cap_rules import resolve_pension_service_cap_months
 
 LUMP_SUM_CONVERSION_FACTOR = 975 / 1000  # 일시금 환산 계수
-PENSION_RATE = 0.017  # 재직연수 1년당 연금 지급률
 PENSION_ELIGIBILITY_MONTHS = 120  # 연금 수급 최소 재직월수 (10년)
 
 # 퇴직수당 재직연수 상한 — 33년 고정.
@@ -37,15 +39,18 @@ def _severance_rate(years: float) -> float:
     return 0.39
 
 
-def calculate_monthly_pension(base_income: float, retire_months: int, cap_months: int) -> int:
-    """연금월액 = 기준소득월액 x min(재직월수, 상한월수)/12 x PENSION_RATE.
+def calculate_monthly_pension(
+    base_income: float, retire_months: int, cap_months: int, retire_yyyymm: int
+) -> int:
+    """연금월액 = 법정 연도별 지급률(tranche) x α(2009년 이전 구간 환산계수) 모형.
 
-    retire_months/cap_months를 그대로 받는 순수 함수다 — Pydantic 요청 객체나
-    소득 밴드 추정 로직과 무관하게, 백테스트가 실제 재직월수와 상한월수를
-    정밀하게 직접 주입할 수 있도록 분리했다(재타이핑 없이 동일 산식 재사용 목적).
+    산식과 근거는 app/services/pension_rate_model.py 참조. retire_months/cap_months/
+    retire_yyyymm을 그대로 받는 순수 함수다 — Pydantic 요청 객체나 소득 밴드 추정
+    로직과 무관하게, 백테스트가 실제 재직월수·상한월수·퇴직연월을 정밀하게 직접
+    주입할 수 있도록 분리했다(재타이핑 없이 동일 산식 재사용 목적).
     """
-    pension_years = min(retire_months, cap_months) / 12
-    return int(base_income * pension_years * PENSION_RATE)
+    capped_months = min(retire_months, cap_months)
+    return calculate_monthly_pension_tranche(base_income, retire_yyyymm, capped_months)
 
 
 def simulate_employees(req: SimulateRequest) -> SimulateResponse:
@@ -75,7 +80,17 @@ def simulate_employees(req: SimulateRequest) -> SimulateResponse:
         monthly_pension = 0
         lump_sum = int(estimated_avg_income * (retire_months / 12) * LUMP_SUM_CONVERSION_FACTOR)
     else:
-        monthly_pension = calculate_monthly_pension(estimated_avg_income, retire_months, cap_months)
+        # 퇴직연월은 오늘부터 남은 재직개월수(retire_after_months) 뒤로 계산한다.
+        # tranche+α 모형은 이 퇴직연월 직전 capped_months개월을 법정 연도별 tranche로
+        # 나눠 요율을 적용하므로(pension_rate_model 참조), 먼 미래에 퇴직하는
+        # 사람일수록 2009년 이전 구간(α 적용 구간) 비중이 자연히 줄어든다 —
+        # 이 계산에 date.today()를 쓰지만, 결과가 "오늘 날짜"에 민감하게 흔들리는
+        # 것이 아니라 "퇴직 시점까지 몇 년 남았는가"에 반응하는 것뿐이다.
+        today_yyyymm = date.today().year * 100 + date.today().month
+        retire_yyyymm = yyyymm_after_months(today_yyyymm, retire_after_months)
+        monthly_pension = calculate_monthly_pension(
+            estimated_avg_income, retire_months, cap_months, retire_yyyymm
+        )
         lump_sum = 0
 
     return SimulateResponse(
