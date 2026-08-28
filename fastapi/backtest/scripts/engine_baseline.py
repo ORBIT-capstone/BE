@@ -25,45 +25,10 @@ BACKTEST_SCRIPTS_DIR = Path(__file__).resolve().parent
 if str(BACKTEST_SCRIPTS_DIR) not in sys.path:
     sys.path.insert(0, str(BACKTEST_SCRIPTS_DIR))
 
-from app.services.employees_service import PENSION_ELIGIBILITY_MONTHS  # noqa: E402
+from app.services.employees_service import PENSION_ELIGIBILITY_MONTHS, PENSION_RATE  # noqa: E402
 from app.services.employees_service import calculate_monthly_pension as _calculate_monthly_pension  # noqa: E402
-from app.services.pension_rate_model import JobType, SchoolLevel  # noqa: E402
 from app.services.service_cap_rules import resolve_pension_service_cap_months  # noqa: E402
 from tranche import idx_from_yyyymm  # noqa: E402
-
-# 원천 데이터의 한글 범주 -> 엔진 Enum. 백테스트에서만 쓰는 매핑이며, 여기서
-# KeyError가 나면 원천 데이터에 새 범주가 생겼다는 뜻이므로 조용히 넘기지 않는다.
-SCHOOL_LEVEL_BY_KOREAN: dict[str, SchoolLevel] = {
-    "유치원": SchoolLevel.KINDERGARTEN,
-    "초등학교": SchoolLevel.ELEMENTARY,
-    "중학교": SchoolLevel.MIDDLE,
-    "고등학교": SchoolLevel.HIGH,
-    "특수학교": SchoolLevel.SPECIAL,
-    "전문대학": SchoolLevel.JUNIOR_COLLEGE,
-    "대학교": SchoolLevel.UNIVERSITY,
-    "법인": SchoolLevel.CORPORATION,
-}
-JOB_TYPE_BY_KOREAN: dict[str, JobType] = {
-    "교원": JobType.TEACHER,
-    "직원": JobType.STAFF,
-}
-
-# --- 과거(legacy) baseline 상수 — 프로덕션에서는 이미 제거됐다 ---
-# Phase 3 baseline_report.md를 재현하기 위한 동결값이다. 당시 엔진은
-# employees_service.PENSION_RATE=0.017 단일 상수와 재직연수 일괄 36년 캡을 썼다.
-# 프로덕션이 pension_rate_model 기반으로 바뀐 뒤에도 "개선 전" 수치를 그대로
-# 재현할 수 있어야 하므로 여기에 동결해 둔다 — 프로덕션 코드에서 import하지 않는다
-# (import하면 프로덕션이 바뀔 때마다 '과거 baseline'이 조용히 따라 움직인다).
-LEGACY_PENSION_RATE = 0.017
-LEGACY_SERVICE_YEARS_CAP = 36
-
-
-def predict_monthly_pension_legacy(base_income: float, months: int) -> int:
-    """개선 전 엔진(단일 상수 1.7% + 일괄 36년 캡)의 연금월액 예측값."""
-    if months < PENSION_ELIGIBILITY_MONTHS:
-        return 0
-    pension_years = min(months / 12, LEGACY_SERVICE_YEARS_CAP)
-    return int(base_income * pension_years * LEGACY_PENSION_RATE)
 
 _IDX_2016_01 = idx_from_yyyymm(201601)
 
@@ -84,11 +49,6 @@ def predict_monthly_pension(
     base_income: float,
     months: int,
     service_months_as_of_2016: int | None = None,
-    *,
-    retire_year: int | None = None,
-    retire_age: int | None = None,
-    school_level: SchoolLevel | None = None,
-    job_type: JobType | None = None,
 ) -> int:
     """app/services/employees_service.py::simulate_employees 의 연금 산식 분기를 그대로 재현.
 
@@ -97,23 +57,12 @@ def predict_monthly_pension(
             monthly_pension = 0
         else:
             cap_months, cap_basis = resolve_pension_service_cap_months(service_months_as_of_2016)
-            monthly_pension = calculate_monthly_pension(estimated_avg_income, retire_months, cap_months, ...)
+            monthly_pension = calculate_monthly_pension(estimated_avg_income, retire_months, cap_months)
 
     service_months_as_of_2016을 넘기지 않으면(None) DEFAULT_MAX(36년 고정)로 판정된다 —
     이전 baseline(재직연수 상한 일괄 36년 캡, engine_defects.md #1)과 동일한 동작이다.
-
-    지급률 보정용 키워드 인자를 하나도 주지 않으면 pension_rate_model의 폴백
-    프로파일이 보정항 없이 적용된다 — Phase 3 baseline 리포트와 동일 조건이다.
     """
     if months < PENSION_ELIGIBILITY_MONTHS:
         return 0
     cap_months, _cap_basis = resolve_pension_service_cap_months(service_months_as_of_2016)
-    return _calculate_monthly_pension(
-        base_income,
-        months,
-        cap_months,
-        retire_year=retire_year,
-        retire_age=retire_age,
-        school_level=school_level,
-        job_type=job_type,
-    )
+    return _calculate_monthly_pension(base_income, months, cap_months)

@@ -3,12 +3,12 @@ import pytest
 from app.schemas.employees import CapBasis, SimulateRequest
 from app.services.employees_service import (
     PENSION_ELIGIBILITY_MONTHS,
+    PENSION_RATE,
     SEVERANCE_YEARS_CAP,
     _severance_rate,
     calculate_monthly_pension,
     simulate_employees,
 )
-from app.services.pension_rate_model import effective_pension_rate
 from app.services.service_cap_rules import (
     DEFAULT_MAX_CAP_MONTHS,
     resolve_pension_service_cap_months,
@@ -62,58 +62,24 @@ def test_resolve_cap_tiered_boundaries(service_months_as_of_2016, expected_cap_m
 # --- employees_service.calculate_monthly_pension (순수 함수) ---
 
 
-def _expected_pension(income: float, service_years: float, **kwargs) -> int:
-    """연금월액 = 소득 x 재직연수 x 실효 지급률. 기대값도 모형에서 가져와
-    상수를 재타이핑하지 않는다(계수가 바뀌어도 이 테스트가 재는 것은 산식 구조다)."""
-    rate = effective_pension_rate(service_years=service_years, base_income=income, **kwargs)
-    return int(income * service_years * rate)
-
-
 def test_calculate_monthly_pension_below_eligibility_not_this_functions_concern():
     # calculate_monthly_pension 자체는 최소가입월수 분기를 모른다(simulate_employees가 처리) —
     # 캡만 적용해 그대로 계산한다는 걸 확인.
     result = calculate_monthly_pension(base_income=3_000_000, retire_months=1, cap_months=432)
-    assert result == _expected_pension(3_000_000, 1 / 12)
+    assert result == int(3_000_000 * (1 / 12) * PENSION_RATE)
 
 
 def test_calculate_monthly_pension_cap_applies_exactly_at_boundary():
     income = 3_000_000
     at_cap = calculate_monthly_pension(income, retire_months=396, cap_months=396)
     over_cap = calculate_monthly_pension(income, retire_months=500, cap_months=396)
-    assert at_cap == over_cap == _expected_pension(income, 33)
+    assert at_cap == over_cap == int(income * 33 * PENSION_RATE)
 
 
 def test_calculate_monthly_pension_under_cap_uses_actual_months():
     income = 3_000_000
     result = calculate_monthly_pension(income, retire_months=240, cap_months=432)
-    assert result == _expected_pension(income, 20)
-
-
-def test_calculate_monthly_pension_applies_group_correction_when_both_given():
-    # 학교급·직구분을 함께 주면 집단 보정이 적용돼 값이 달라진다.
-    income = 3_000_000
-    plain = calculate_monthly_pension(income, retire_months=360, cap_months=432)
-    with_group = calculate_monthly_pension(
-        income, retire_months=360, cap_months=432,
-        school_level=SchoolLevel.UNIVERSITY, job_type=JobType.TEACHER,
-    )
-    assert with_group != plain
-    assert with_group == _expected_pension(
-        income, 30, school_level=SchoolLevel.UNIVERSITY, job_type=JobType.TEACHER
-    )
-
-
-def test_calculate_monthly_pension_ignores_group_when_only_one_given():
-    # 둘 중 하나만 주면 집단 보정을 쓰지 않는다(폴백과 동일).
-    income = 3_000_000
-    plain = calculate_monthly_pension(income, retire_months=360, cap_months=432)
-    only_school = calculate_monthly_pension(
-        income, retire_months=360, cap_months=432, school_level=SchoolLevel.UNIVERSITY
-    )
-    only_job = calculate_monthly_pension(
-        income, retire_months=360, cap_months=432, job_type=JobType.TEACHER
-    )
-    assert only_school == only_job == plain
+    assert result == int(income * 20 * PENSION_RATE)
 
 
 # --- employees_service.simulate_employees (통합) ---

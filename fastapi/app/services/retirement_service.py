@@ -12,8 +12,7 @@ from app.schemas.retirement import (
     SimulationResult,
     TimelinePoint,
 )
-from app.services.employees_service import LUMP_SUM_CONVERSION_FACTOR
-from app.services.pension_rate_model import effective_pension_rate
+from app.services.employees_service import LUMP_SUM_CONVERSION_FACTOR, PENSION_RATE
 from app.services.reduction_rules import calculate_bracket_reduction, get_reduction_rule
 from app.services.service_cap_rules import resolve_pension_service_cap_months
 
@@ -284,7 +283,6 @@ def _calculate_lump_sum_and_pension(
     base_monthly_income: float,
     total_service_years: float,
     deduction_years: float,
-    retire_age: int | None = None,
 ) -> tuple[float, float]:
     """공제일시금(퇴직연금공제일시금 방식)과 잔여 연금을 계산한다.
 
@@ -299,17 +297,8 @@ def _calculate_lump_sum_and_pension(
            총재직연수가 상한을 넘는 사람의 공제일시금만 상한을 벗어나 회귀가 생긴다
            (아래 3번 불변식이 깨짐 — tests/test_retirement_service.py 참조).
       3. 연금 선택 연수 = capped_service_years - effective_deduction_years (항상 >= 0)
-    이렇게 구한 연금 선택 연수에 pension_rate_model의 실효 지급률을 적용한다 —
-    /api/employees/simulate와 같은 지급률 모형을 써서 두 엔드포인트가 같은 사람에게
-    서로 다른 연금월액을 내놓지 않도록 한다.
-
-    지급률 구간은 **연금 선택 연수가 아니라 총재직연수(capped_service_years)** 로
-    고른다. 실효 지급률이 재직연수에 따라 달라지는 것은 그 사람의 재직기간 구성
-    (2009년 이전 비중 등)이 반영된 결과이므로, 공제일시금으로 일부를 떼어내
-    연금 선택 연수가 줄어드는 것과는 무관하기 때문이다.
-
-    ScenariosRequest에는 학교급·직구분·퇴직연도가 없어 해당 보정항은 적용하지
-    않는다(집단 미제공 폴백 프로파일). 퇴직연령만 current_age로 넘긴다.
+    이렇게 구한 연금 선택 연수로 employees_service의 기존 퇴직연금 산식(PENSION_RATE)을
+    그대로 재사용한다.
 
     ScenariosRequest에는 2016.1.1 시점 재직기간 입력이 없으므로 여기서는 항상
     resolve_pension_service_cap_months(None) -> 본칙 36년(cap_basis=DEFAULT_MAX)을
@@ -329,12 +318,7 @@ def _calculate_lump_sum_and_pension(
         LUMP_SUM_CONVERSION_FACTOR + LUMP_SUM_SQUARE_FACTOR * effective_deduction_years
     )
     pension_years = capped_service_years - effective_deduction_years
-    pension_rate = effective_pension_rate(
-        service_years=capped_service_years,
-        base_income=base_monthly_income,
-        retire_age=retire_age,
-    )
-    monthly_pension = base_monthly_income * pension_years * pension_rate
+    monthly_pension = base_monthly_income * pension_years * PENSION_RATE
     return lump_sum, monthly_pension
 
 
@@ -434,13 +418,13 @@ def simulate_scenarios(
 
     # LUMP_SUM: 전액 공제(공제연수=총재직연수) -> 연금 선택 연수 0, 공제일시금 산식만 남음
     full_lump_sum, full_pension = _calculate_lump_sum_and_pension(
-        base_monthly_income, total_service_years, total_service_years, current_age
+        base_monthly_income, total_service_years, total_service_years
     )
 
     # SPLIT(분할수령): 요청된(또는 제약 내 최댓값으로 클램프된) 공제연수만큼만 일시금으로 전환
     split_deduction_years = _resolve_split_deduction_years(total_service_years, deduction_years)
     split_lump_sum, split_pension = _calculate_lump_sum_and_pension(
-        base_monthly_income, total_service_years, split_deduction_years, current_age
+        base_monthly_income, total_service_years, split_deduction_years
     )
 
     scenario_inputs: dict[ScenarioType, tuple[float, float]] = {
