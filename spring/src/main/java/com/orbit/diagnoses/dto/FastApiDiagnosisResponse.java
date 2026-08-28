@@ -21,6 +21,7 @@ public record FastApiDiagnosisResponse(
 		requireFiniteNumber(raw, "monthly_gap");
 		requireInteger(raw, "target_age");
 		requireArray(raw, "timeline");
+		validateTimeline(raw.get("timeline"));
 
 		JsonNode statusNode = raw.get("status");
 		if (statusNode == null || !statusNode.isString() || !ALLOWED_STATUSES.contains(statusNode.asString())) {
@@ -66,6 +67,20 @@ public record FastApiDiagnosisResponse(
 		JsonNode node = raw.get(field);
 		if (node == null || !node.isArray()) {
 			throw new IllegalArgumentException("진단 응답의 " + field + "가 올바르지 않습니다.");
+		}
+	}
+
+	private static void validateTimeline(JsonNode timeline) {
+		for (JsonNode point : timeline) {
+			if (!point.isObject()) {
+				throw new IllegalArgumentException("진단 응답의 timeline 항목은 객체여야 합니다.");
+			}
+			requireInteger(point, "age");
+			requireFiniteNumber(point, "asset");
+			requireFiniteNumber(point, "annual_income");
+			requireFiniteNumber(point, "annual_expense");
+			requireFiniteNumber(point, "annual_gap");
+			requireFiniteNumber(point, "cumulative_annual_gap");
 		}
 	}
 }
