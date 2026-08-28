@@ -1,12 +1,12 @@
 package com.orbit.diagnoses.controller;
 
 import com.orbit.global.exception.ErrorResponse;
+import com.orbit.global.auth.AuthenticatedUser;
+import com.orbit.users.domain.User;
 import com.orbit.diagnoses.dto.DiagnosisDetailResponse;
 import com.orbit.diagnoses.dto.DiagnosisRequest;
 import com.orbit.diagnoses.dto.DiagnosisSummaryResponse;
 import com.orbit.diagnoses.service.DiagnosisService;
-import com.orbit.users.domain.User;
-import com.orbit.users.service.AuthService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;
@@ -24,7 +24,6 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -35,7 +34,6 @@ import org.springframework.web.bind.annotation.RestController;
 public class DiagnosisController {
 
 	private final DiagnosisService diagnosisService;
-	private final AuthService authService;
 
 	@PostMapping
 	@SecurityRequirement(name = "bearerAuth")
@@ -46,10 +44,9 @@ public class DiagnosisController {
 		@ApiResponse(responseCode = "502", description = "진단 서버 연결 실패 또는 비정상 응답", content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
 	})
 	public ResponseEntity<DiagnosisDetailResponse> create(
-		@Parameter(hidden = true) @RequestHeader(value = "Authorization", required = false) String authorizationHeader,
+		@Parameter(hidden = true) @AuthenticatedUser User user,
 		@Valid @RequestBody DiagnosisRequest request
 	) {
-		User user = authService.getUserFromAuthorizationHeader(authorizationHeader);
 		DiagnosisDetailResponse result = diagnosisService.createDiagnosis(user.getId(), request);
 		return ResponseEntity.status(HttpStatus.CREATED).body(result);
 	}
@@ -59,9 +56,8 @@ public class DiagnosisController {
 	@Operation(summary = "진단 목록 조회", description = "로그인한 회원의 진단 결과 목록을 생성일 최신순으로 조회합니다.")
 	@ApiResponse(responseCode = "401", description = "인증 정보가 없거나 유효하지 않음", content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
 	public ResponseEntity<List<DiagnosisSummaryResponse>> list(
-		@Parameter(hidden = true) @RequestHeader(value = "Authorization", required = false) String authorizationHeader
+		@Parameter(hidden = true) @AuthenticatedUser User user
 	) {
-		User user = authService.getUserFromAuthorizationHeader(authorizationHeader);
 		return ResponseEntity.ok(diagnosisService.getSummaries(user.getId()));
 	}
 
@@ -74,10 +70,9 @@ public class DiagnosisController {
 		@ApiResponse(responseCode = "404", description = "진단 결과를 찾을 수 없음", content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
 	})
 	public ResponseEntity<DiagnosisDetailResponse> get(
-		@Parameter(hidden = true) @RequestHeader(value = "Authorization", required = false) String authorizationHeader,
+		@Parameter(hidden = true) @AuthenticatedUser User user,
 		@PathVariable Long id
 	) {
-		User user = authService.getUserFromAuthorizationHeader(authorizationHeader);
 		return ResponseEntity.ok(diagnosisService.getDetail(user.getId(), id));
 	}
 }

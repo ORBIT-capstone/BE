@@ -1,6 +1,7 @@
 package com.orbit.global.auth;
 
 import com.orbit.users.service.AuthService;
+import com.orbit.users.domain.User;
 import lombok.RequiredArgsConstructor;
 import org.springframework.core.MethodParameter;
 import org.springframework.stereotype.Component;
@@ -18,7 +19,7 @@ public class AuthenticatedUserArgumentResolver implements HandlerMethodArgumentR
 	@Override
 	public boolean supportsParameter(MethodParameter parameter) {
 		return parameter.hasParameterAnnotation(AuthenticatedUser.class)
-			&& Long.class.equals(parameter.getParameterType());
+			&& User.class.equals(parameter.getParameterType());
 	}
 
 	@Override
@@ -29,6 +30,6 @@ public class AuthenticatedUserArgumentResolver implements HandlerMethodArgumentR
 		WebDataBinderFactory binderFactory
 	) {
 		String authorizationHeader = webRequest.getHeader("Authorization");
-		return authService.getUserFromAuthorizationHeader(authorizationHeader).getId();
+		return authService.getUserFromAuthorizationHeader(authorizationHeader);
 	}
 }

@@ -10,10 +10,12 @@ from app.schemas.retirement import (
     ScenariosResult,
     SimulationResult,
 )
-from app.services.retirement_service import diagnose_core
-from app.services.recommendation_service import recommend_retirement
-from app.services.pension_reduction_service import simulate_pension_reduction
-from app.services.payout_scenarios_service import simulate_scenarios
+from app.services.retirement_service import (
+    diagnose_core,
+    recommend_retirement,
+    simulate_pension_reduction,
+    simulate_scenarios,
+)
 
 router = APIRouter(prefix="/api/retirement", tags=["retirement"])
 

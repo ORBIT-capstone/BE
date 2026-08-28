@@ -1,6 +1,7 @@
 package com.orbit.users.controller;
 
 import com.orbit.global.exception.ErrorResponse;
+import com.orbit.global.auth.AuthenticatedUser;
 import com.orbit.users.domain.User;
 import com.orbit.users.dto.LoginRequest;
 import com.orbit.users.dto.MessageResponse;
@@ -29,7 +30,6 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -69,9 +69,8 @@ public class UserController {
 	@Operation(summary = "회원 정보 조회", description = "현재 로그인한 회원의 정보를 조회합니다.")
 	@ApiResponse(responseCode = "401", description = "인증 정보가 없거나 유효하지 않음", content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
 	public ResponseEntity<UserResponse> getMe(
-		@Parameter(hidden = true) @RequestHeader(value = "Authorization", required = false) String authorizationHeader
+		@Parameter(hidden = true) @AuthenticatedUser User user
 	) {
-		User user = authService.getUserFromAuthorizationHeader(authorizationHeader);
 		return ResponseEntity.ok(UserResponse.from(user));
 	}
 
@@ -83,10 +82,9 @@ public class UserController {
 		@ApiResponse(responseCode = "401", description = "인증 정보가 없거나 유효하지 않음", content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
 	})
 	public ResponseEntity<UserResponse> updateMe(
-		@Parameter(hidden = true) @RequestHeader(value = "Authorization", required = false) String authorizationHeader,
+		@Parameter(hidden = true) @AuthenticatedUser User user,
 		@Valid @RequestBody UpdateUserRequest request
 	) {
-		User user = authService.getUserFromAuthorizationHeader(authorizationHeader);
 		User updatedUser = userService.update(user.getId(), request);
 		return ResponseEntity.ok(UserResponse.from(updatedUser));
 	}
@@ -99,10 +97,10 @@ public class UserController {
 		@ApiResponse(responseCode = "401", description = "액세스 토큰 또는 리프레시 토큰이 유효하지 않음", content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
 	})
 	public ResponseEntity<MessageResponse> logout(
-		@Parameter(hidden = true) @RequestHeader(value = "Authorization", required = false) String authorizationHeader,
+		@Parameter(hidden = true) @AuthenticatedUser User user,
 		@Valid @RequestBody RefreshTokenRequest request
 	) {
-		authService.logout(authorizationHeader, request.refreshToken());
+		authService.logout(user.getId(), request.refreshToken());
 		return ResponseEntity.ok(new MessageResponse("로그아웃이 완료되었습니다."));
 	}
 
@@ -111,9 +109,8 @@ public class UserController {
 	@Operation(summary = "회원 탈퇴", description = "현재 로그인한 사용자를 탈퇴 처리합니다.")
 	@ApiResponse(responseCode = "401", description = "인증 정보가 없거나 유효하지 않음", content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
 	public ResponseEntity<MessageResponse> deleteMe(
-		@Parameter(hidden = true) @RequestHeader(value = "Authorization", required = false) String authorizationHeader
+		@Parameter(hidden = true) @AuthenticatedUser User user
 	) {
-		User user = authService.getUserFromAuthorizationHeader(authorizationHeader);
 		userService.delete(user);
 		return ResponseEntity.ok(new MessageResponse("회원 탈퇴가 완료되었습니다."));
 	}
