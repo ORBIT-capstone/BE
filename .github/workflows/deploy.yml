@@ -50,6 +50,6 @@ jobs:
             git fetch origin main
             git reset --hard origin/main
             git clean -fd
-            docker compose --env-file .env.prod build
-            docker compose --env-file .env.prod up -d
+            docker compose --env-file .env build
+            docker compose --env-file .env up -d
             docker image prune -f
