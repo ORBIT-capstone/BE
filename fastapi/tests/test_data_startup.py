@@ -31,3 +31,12 @@ def test_app_startup_fails_fast_when_required_csv_missing(monkeypatch, tmp_path)
     with pytest.raises(RuntimeError):
         with TestClient(app):
             pass
+
+
+def test_ensure_data_available_rejects_invalid_columns(monkeypatch, tmp_path):
+    invalid_path = tmp_path / "active_income_stats.csv"
+    invalid_path.write_text("wrong,value\na,1\n", encoding="utf-8")
+    monkeypatch.setattr(employees_income_repository, "_CSV_PATH", invalid_path)
+
+    with pytest.raises(RuntimeError, match="필수 컬럼"):
+        employees_income_repository.ensure_data_available()
