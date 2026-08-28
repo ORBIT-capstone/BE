@@ -15,3 +15,9 @@ spring:
 
 fastapi:
   base-url: ${FASTAPI_BASE_URL:http://localhost:8000}
+  connect-timeout-ms: ${FASTAPI_CONNECT_TIMEOUT_MS:3000}
+  read-timeout-ms: ${FASTAPI_READ_TIMEOUT_MS:5000}
+
+auth:
+  token:
+    secret: ${AUTH_TOKEN_SECRET:orbit-local-token-secret-change-me}
