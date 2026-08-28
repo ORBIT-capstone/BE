@@ -6,6 +6,7 @@ import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.time.Instant;
 import java.util.Base64;
+import java.util.UUID;
 import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
 import org.springframework.beans.factory.annotation.Value;
@@ -71,7 +72,7 @@ public class AuthTokenService {
 
 	private String createToken(User user, String tokenType, long validitySeconds) {
 		long expiresAt = Instant.now().plusSeconds(validitySeconds).getEpochSecond();
-		String payload = user.getId() + ":" + user.getEmail() + ":" + tokenType + ":" + expiresAt;
+		String payload = user.getId() + ":" + user.getEmail() + ":" + tokenType + ":" + expiresAt + ":" + UUID.randomUUID();
 		String encodedPayload = encode(payload.getBytes(StandardCharsets.UTF_8));
 		String signature = sign(encodedPayload);
 		return encodedPayload + "." + signature;
@@ -86,7 +87,9 @@ public class AuthTokenService {
 
 			String payload = new String(Base64.getUrlDecoder().decode(parts[0]), StandardCharsets.UTF_8);
 			String[] claims = payload.split(":");
-			if (claims.length != 4) {
+			// 배포 전에 발급된 4-claim 토큰도 만료 시점까지 허용하고,
+			// 새 토큰은 nonce가 포함된 5-claim 형식으로 발급해 같은 초 내 rotation도 보장한다.
+			if (claims.length != 4 && claims.length != 5) {
 				throw new InvalidTokenException();
 			}
 
