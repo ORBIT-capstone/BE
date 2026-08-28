@@ -32,11 +32,10 @@ public class AuthService {
 	}
 
 	@Transactional
-	public void logout(String authorizationHeader, String refreshToken) {
-		User user = getUserFromAuthorizationHeader(authorizationHeader);
+	public void logout(Long authenticatedUserId, String refreshToken) {
 		Long refreshTokenUserId = authTokenService.getUserIdFromRefreshToken(refreshToken);
 
-		if (!user.getId().equals(refreshTokenUserId)) {
+		if (!authenticatedUserId.equals(refreshTokenUserId)) {
 			throw new InvalidTokenException();
 		}
 
