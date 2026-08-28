@@ -1,5 +1,7 @@
 import math
 
+from app.exceptions import DomainValidationError
+
 from app.schemas.retirement import (
     Gender,
     ReadinessStatus,
@@ -59,7 +61,7 @@ def simulate_retirement(
     diagnosis/recommendations API는 모두 이 함수(별칭 diagnose_core)를 통해서만 시뮬레이션을 수행한다.
     """
     if monthly_expenses <= 0:
-        raise ValueError("monthly_expenses는 0보다 커야 합니다.")
+        raise DomainValidationError("monthly_expenses는 0보다 커야 합니다.")
 
     monthly_gap = monthly_expenses - monthly_pension
 
@@ -142,7 +144,7 @@ def _expand_upper_bound(condition, seed: float, max_doublings: int = 60) -> floa
         if condition(high):
             return high
         high *= 2
-    raise ValueError("추가 소득 필요액을 찾을 수 없습니다.")
+    raise DomainValidationError("추가 소득 필요액을 찾을 수 없습니다.")
 
 
 def _round_up(value: float, decimals: int = 2) -> float:
@@ -249,7 +251,7 @@ def simulate_pension_reduction(
     감액 산식(reduction_rules)만 계산한다.
     """
     if reemployment_income < 0:
-        raise ValueError("reemployment_income은 0 이상이어야 합니다.")
+        raise DomainValidationError("reemployment_income은 0 이상이어야 합니다.")
 
     rule = get_reduction_rule(year)
     excess_income = max(0.0, reemployment_income - rule.threshold)
@@ -332,15 +334,15 @@ def _resolve_split_deduction_years(total_service_years: int, deduction_years: in
 
     if deduction_years is None:
         if max_allowed < 0:
-            raise ValueError(
+            raise DomainValidationError(
                 f"총 재직연수가 {MIN_PENSION_YEARS}년 미만이면 분할수령(SPLIT)을 선택할 수 없습니다."
             )
         return max_allowed
 
     if deduction_years < 0 or deduction_years > MAX_DEDUCTION_YEARS:
-        raise ValueError(f"deduction_years는 0~{MAX_DEDUCTION_YEARS} 사이여야 합니다.")
+        raise DomainValidationError(f"deduction_years는 0~{MAX_DEDUCTION_YEARS} 사이여야 합니다.")
     if total_service_years - deduction_years < MIN_PENSION_YEARS:
-        raise ValueError(f"연금 선택 기간(총재직연수-deduction_years)은 {MIN_PENSION_YEARS}년 이상이어야 합니다.")
+        raise DomainValidationError(f"연금 선택 기간(총재직연수-deduction_years)은 {MIN_PENSION_YEARS}년 이상이어야 합니다.")
 
     return deduction_years
 
@@ -412,9 +414,9 @@ def simulate_scenarios(
     early_years를 직접 산정해 넘겨야 한다.
     """
     if not (0 < early_years <= EARLY_YEARS_MAX):
-        raise ValueError(f"early_years는 0보다 크고 {EARLY_YEARS_MAX} 이하여야 합니다.")
+        raise DomainValidationError(f"early_years는 0보다 크고 {EARLY_YEARS_MAX} 이하여야 합니다.")
     if total_service_years <= 0:
-        raise ValueError("total_service_years는 0보다 커야 합니다.")
+        raise DomainValidationError("total_service_years는 0보다 커야 합니다.")
 
     # LUMP_SUM: 전액 공제(공제연수=총재직연수) -> 연금 선택 연수 0, 공제일시금 산식만 남음
     full_lump_sum, full_pension = _calculate_lump_sum_and_pension(
