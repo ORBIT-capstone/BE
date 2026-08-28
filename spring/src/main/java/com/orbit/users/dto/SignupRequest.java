@@ -1,6 +1,5 @@
 package com.orbit.users.dto;
 
-import com.orbit.users.domain.EmploymentStatus;
 import com.orbit.users.domain.Gender;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.Email;
@@ -34,10 +33,6 @@ public record SignupRequest(
 
 	@Schema(description = "성별", example = "MALE", allowableValues = {"MALE", "FEMALE"})
 	@NotNull(message = "성별은 필수입니다.")
-	Gender gender,
-
-	@Schema(description = "재직 상태", example = "employees", allowableValues = {"employees", "retirees"})
-	@NotNull(message = "재직 상태는 필수입니다.")
-	EmploymentStatus employmentStatus
+	Gender gender
 ) {
 }

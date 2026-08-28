@@ -23,6 +23,7 @@ services:
       - mysql
       - fastapi
     environment:
+      AUTH_TOKEN_SECRET: ${AUTH_TOKEN_SECRET:?AUTH_TOKEN_SECRET is required}
       SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE}
       FASTAPI_BASE_URL: ${FASTAPI_BASE_URL}
 

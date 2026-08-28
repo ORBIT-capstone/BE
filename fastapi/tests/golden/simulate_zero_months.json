@@ -1,0 +1,15 @@
+{
+  "body": {
+    "cap_basis": "DEFAULT_MAX",
+    "current_band": "0~59",
+    "estimated_avg_income": 5000000,
+    "income_factor": 1.269,
+    "lump_sum": 0,
+    "monthly_pension": 0,
+    "retire_band": "0~59",
+    "retire_months": 0,
+    "service_cap_years": 36,
+    "severance_pay": 0
+  },
+  "status_code": 200
+}

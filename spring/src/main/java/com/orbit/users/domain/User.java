@@ -43,25 +43,19 @@ public class User {
 	@Column(nullable = false, length = 20)
 	private Gender gender;
 
-	@Enumerated(EnumType.STRING)
-	@Column(name = "employment_status", nullable = false, length = 20)
-	private EmploymentStatus employmentStatus;
-
 	@Builder
 	private User(
 		String email,
 		String password,
 		String name,
 		LocalDate birthDate,
-		Gender gender,
-		EmploymentStatus employmentStatus
+		Gender gender
 	) {
 		this.email = email;
 		this.password = password;
 		this.name = name;
 		this.birthDate = birthDate;
 		this.gender = gender;
-		this.employmentStatus = employmentStatus;
 	}
 
 	public void updateRefreshTokenHash(String refreshTokenHash) {
@@ -70,5 +64,21 @@ public class User {
 
 	public void clearRefreshTokenHash() {
 		this.refreshTokenHash = null;
+	}
+
+	public void updateProfile(
+		String name,
+		LocalDate birthDate,
+		Gender gender
+	) {
+		if (name != null) {
+			this.name = name;
+		}
+		if (birthDate != null) {
+			this.birthDate = birthDate;
+		}
+		if (gender != null) {
+			this.gender = gender;
+		}
 	}
 }
