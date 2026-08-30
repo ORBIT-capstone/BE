@@ -128,10 +128,10 @@ CASES = [
             "reemployment_income": 99999 * WON_PER_MANWON,
         },
     },
-    # --- /api/retirement/scenarios ---
+    # --- /api/employees/scenarios ---
     {
         "name": "scenarios_basic",
-        "path": "/api/retirement/scenarios",
+        "path": "/api/employees/scenarios",
         "body": {
             "current_age": 60,
             "monthly_expenses": 250 * WON_PER_MANWON,
@@ -144,7 +144,7 @@ CASES = [
     },
     {
         "name": "scenarios_with_deduction_years",
-        "path": "/api/retirement/scenarios",
+        "path": "/api/employees/scenarios",
         "body": {
             "current_age": 60,
             "monthly_expenses": 250 * WON_PER_MANWON,
