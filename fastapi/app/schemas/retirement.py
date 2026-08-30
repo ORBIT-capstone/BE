@@ -96,7 +96,11 @@ class ScenariosRequest(DiagnosisRequest):
 
     monthly_pension: WonAmountInput | None = Field(
         default=None, ge=0,
-        description="월연금(원). 생략/null이면 기준소득월액 × min(총 재직연수, 36) × 0.017로 추정한다. 0을 입력하면 그대로 사용한다.",
+        description=(
+            "월연금(원). 생략/null이면 현재 퇴직연월, 기준소득월액, 최대 36년의 재직기간에 "
+            "연도별 지급률과 2009년 이전 구간 환산계수를 적용해 추정한다. "
+            "직접 입력한 값은 그대로 사용하며, 0도 유지한다."
+        ),
     )
 
     early_years: float = Field(
