@@ -1,7 +1,10 @@
+from datetime import date
+
 import pytest
 
 from app.schemas.retirement import ReadinessStatus, RecommendationType, ScenarioOutcome, ScenarioType
 from app.services import retirement_service
+from app.services.pension_rate_model import calculate_monthly_pension_tranche
 from app.services.reduction_rules import get_reduction_rule
 from app.services.retirement_service import (
     EARLY_REDUCTION_RATE_PER_YEAR,
@@ -23,6 +26,19 @@ from app.services.retirement_service import (
     simulate_retirement,
     simulate_scenarios,
 )
+
+
+def _today_yyyymm() -> int:
+    today = date.today()
+    return today.year * 100 + today.month
+
+
+def _expected_pension_for_years(base_monthly_income: float, pension_years: float) -> float:
+    """_calculate_lump_sum_and_pension이 위임하는 tranche+α 모형에서 기대값을 직접
+    가져온다 — 요율표를 테스트에 재타이핑하지 않는다. ScenariosRequest는 "지금
+    퇴직하는" 사람을 다루므로 프로덕션과 동일하게 오늘 날짜를 퇴직연월로 쓴다.
+    """
+    return calculate_monthly_pension_tranche(base_monthly_income, _today_yyyymm(), round(pension_years * 12))
 
 
 def test_get_target_age_male():
@@ -494,7 +510,9 @@ def test_simulate_scenarios_early_reduction_matches_per_year_rate():
 def test_calculate_lump_sum_and_pension_matches_manual_example():
     # 수기 계산 예시: 기준소득월액 300만원, 공제 13년, 총재직연수 30년
     # 공제일시금 = 300 x 13 x (0.975 + 0.0065 x 13) = 300 x 13 x 1.0595 = 4132.05
-    # 연금 선택 연수 = 30 - 13 = 17년 -> 월연금 = 300 x 17 x 0.017 = 86.7
+    # (공제일시금 산식은 지급률 모형과 무관해 하드코딩값으로 검증 가능하다.)
+    # 연금 선택 연수 = 30 - 13 = 17년 -> 월연금은 tranche+α 모형에서 위임값을 그대로 가져온다
+    # (법정 연도별 요율이 섞여 단순 상수식으로 재현할 수 없다).
     lump_sum, monthly_pension = _calculate_lump_sum_and_pension(
         base_monthly_income=300,
         total_service_years=30,
@@ -502,7 +520,7 @@ def test_calculate_lump_sum_and_pension_matches_manual_example():
     )
 
     assert lump_sum == pytest.approx(4132.05)
-    assert monthly_pension == pytest.approx(86.7)
+    assert monthly_pension == pytest.approx(_expected_pension_for_years(300, 17))
 
 
 def test_calculate_lump_sum_and_pension_full_deduction_matches_lump_sum_only():
@@ -672,9 +690,8 @@ def test_calculate_lump_sum_and_pension_caps_service_years_at_36():
         total_service_years=40,
         deduction_years=0,
     )
-    from app.services.employees_service import PENSION_RATE
 
-    assert monthly_pension == pytest.approx(300 * 36 * PENSION_RATE)
+    assert monthly_pension == pytest.approx(_expected_pension_for_years(300, 36))
 
 
 def test_calculate_lump_sum_and_pension_applies_cap_before_deduction_not_after():
@@ -685,12 +702,11 @@ def test_calculate_lump_sum_and_pension_applies_cap_before_deduction_not_after()
         total_service_years=40,
         deduction_years=10,
     )
-    from app.services.employees_service import PENSION_RATE
 
     correct_order_years = 26  # min(40, 36) - 10
     wrong_order_years = 30  # (40 - 10), 이후 min(30,36)=30 (캡이 안 걸림)
-    assert monthly_pension == pytest.approx(300 * correct_order_years * PENSION_RATE)
-    assert monthly_pension != pytest.approx(300 * wrong_order_years * PENSION_RATE)
+    assert monthly_pension == pytest.approx(_expected_pension_for_years(300, correct_order_years))
+    assert monthly_pension != pytest.approx(_expected_pension_for_years(300, wrong_order_years))
 
 
 def test_calculate_lump_sum_and_pension_under_cap_unaffected():
@@ -702,7 +718,7 @@ def test_calculate_lump_sum_and_pension_under_cap_unaffected():
         deduction_years=13,
     )
     assert lump_sum == pytest.approx(4132.05)
-    assert monthly_pension == pytest.approx(86.7)
+    assert monthly_pension == pytest.approx(_expected_pension_for_years(300, 17))
 
 
 # --- 회귀 수정: 전액공제(LUMP_SUM) + 총재직연수>36년일 때 음수 pension_years 방지 ---
@@ -776,13 +792,12 @@ def test_calculate_lump_sum_and_pension_under_or_at_cap_matches_uncapped_formula
     total_service_years, deduction_years
 ):
     """회귀 방지: total_service_years <= 36(상한)인 기존 케이스들은 캡 적용 여부와
-    무관하게 이전의 단순식(total_service_years - deduction_years)과 정확히 같아야 한다."""
-    from app.services.employees_service import PENSION_RATE
-
+    무관하게 단순식(total_service_years - deduction_years)의 연금 선택 연수와
+    정확히 같아야 한다(지급률 자체는 tranche+α 모형에서 위임값을 가져온다)."""
     _lump_sum, monthly_pension = _calculate_lump_sum_and_pension(
         base_monthly_income=300,
         total_service_years=total_service_years,
         deduction_years=deduction_years,
     )
     expected_pension_years = total_service_years - deduction_years
-    assert monthly_pension == pytest.approx(300 * expected_pension_years * PENSION_RATE)
+    assert monthly_pension == pytest.approx(_expected_pension_for_years(300, expected_pension_years))
