@@ -6,15 +6,12 @@ from app.schemas.retirement import (
     RecommendationResult,
     ReductionRequest,
     ReductionResult,
-    ScenariosRequest,
-    ScenariosResult,
     SimulationResult,
 )
 from app.services.retirement_service import (
     diagnose_core,
     recommend_retirement,
     simulate_pension_reduction,
-    simulate_scenarios,
 )
 
 router = APIRouter(prefix="/api/retirement", tags=["retirement"])
@@ -56,7 +53,7 @@ def recommend(req: RecommendationRequest) -> RecommendationResult:
     "/reduction",
     response_model=ReductionResult,
     summary="재취업 소득에 따른 연금 감액 계산",
-    description="재취업 예상 월소득에 소득심사 감액 규칙을 적용해 월 감액액과 감액 반영 timeline을 계산",
+    description="재취업 예상 월소득에 2025년 소득심사 감액 규칙을 고정 적용해 월 감액액과 감액 반영 timeline을 계산",
 )
 def reduction(req: ReductionRequest) -> ReductionResult:
     return simulate_pension_reduction(
@@ -66,25 +63,4 @@ def reduction(req: ReductionRequest) -> ReductionResult:
         asset=req.asset,
         gender=req.gender,
         reemployment_income=req.reemployment_income,
-        year=req.year,
-    )
-
-
-@router.post(
-    "/scenarios",
-    response_model=ScenariosResult,
-    summary="연금 수령방식 시나리오 비교",
-    description="정상/조기/일시금/분할 4가지 연금 수령방식별 고갈 나이와 총 수령액을 비교하고 최적 방식을 추천",
-)
-def scenarios(req: ScenariosRequest) -> ScenariosResult:
-    return simulate_scenarios(
-        current_age=req.current_age,
-        monthly_expenses=req.monthly_expenses,
-        monthly_pension=req.monthly_pension,
-        asset=req.asset,
-        gender=req.gender,
-        base_monthly_income=req.base_monthly_income,
-        total_service_years=req.total_service_years,
-        early_years=req.early_years,
-        deduction_years=req.deduction_years,
     )
