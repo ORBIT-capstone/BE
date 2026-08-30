@@ -1,11 +1,27 @@
+from datetime import date
+
 import pytest
 from fastapi.testclient import TestClient
 
 from app.main import app
+from app.schemas.money import WON_PER_MANWON
+from app.services import retirement_service
+from app.services.pension_rate_model import calculate_monthly_pension_tranche
+
+
+FIXED_TODAY = date(2026, 1, 1)
+
+
+class FixedDate(date):
+    @classmethod
+    def today(cls):
+        return FIXED_TODAY
 
 
 @pytest.fixture
-def client():
+def client(monkeypatch):
+    # 연도별 지급률은 퇴직연월에 의존하므로 CI 실행 날짜와 무관하게 검증한다.
+    monkeypatch.setattr(retirement_service, "date", FixedDate)
     return TestClient(app)
 
 
@@ -27,9 +43,17 @@ def test_missing_pension_matches_estimated_pension(client, years, explicit_null)
     if explicit_null:
         request["monthly_pension"] = None
     response = client.post("/api/employees/scenarios", json=request)
+    # 이 테스트는 생략한 월연금이 현재 모형의 추정값을 입력한 경우와 같은지 검증한다.
+    # 지급률표 자체는 test_pension_rate_model.py에서 별도로 검증한다.
+    # 은퇴 서비스의 내부 만원 단위와 모형 반환 정밀도를 유지한 뒤 API 단위(원)로 환산한다.
+    estimated_pension = calculate_monthly_pension_tranche(
+        request["base_monthly_income"] / WON_PER_MANWON,
+        FIXED_TODAY.year * 100 + FIXED_TODAY.month,
+        min(years, 36) * 12,
+    ) * WON_PER_MANWON
     expected = client.post("/api/employees/scenarios", json={
         **body(years),
-        "monthly_pension": 3_000_000 * min(years, 36) * 0.017,
+        "monthly_pension": estimated_pension,
     })
     assert response.status_code == expected.status_code == 200
     assert response.json() == expected.json()
