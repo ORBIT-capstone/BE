@@ -71,7 +71,6 @@ def test_reduction_income_at_threshold_produces_zero_reduction(client):
             "asset": 100_000_000,
             "gender": "male",
             "reemployment_income": reemployment_income_won,
-            "year": 2025,
         },
     )
 

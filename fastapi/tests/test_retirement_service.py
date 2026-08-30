@@ -231,7 +231,7 @@ def test_recommend_retirement_saving_and_income_when_cap_alone_insufficient():
 
 
 def test_simulate_pension_reduction_no_reduction_at_exact_threshold():
-    rule = get_reduction_rule(None)
+    rule = get_reduction_rule(2025)
 
     result = simulate_pension_reduction(
         current_age=60,
@@ -273,7 +273,7 @@ def test_simulate_pension_reduction_no_reduction_when_income_is_zero():
 
 
 def test_simulate_pension_reduction_capped_when_income_far_exceeds_threshold():
-    rule = get_reduction_rule(None)
+    rule = get_reduction_rule(2025)
     monthly_pension = 150
 
     result = simulate_pension_reduction(
