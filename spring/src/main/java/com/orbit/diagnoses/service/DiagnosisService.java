@@ -1,14 +1,12 @@
 package com.orbit.diagnoses.service;
 
-import com.orbit.diagnoses.client.FastApiDiagnosisClient;
 import com.orbit.diagnoses.domain.Diagnosis;
+import com.orbit.diagnoses.domain.DiagnosisType;
 import com.orbit.diagnoses.dto.DiagnosisDetailResponse;
-import com.orbit.diagnoses.dto.DiagnosisRequest;
-import com.orbit.diagnoses.dto.DiagnosisSummaryResponse;
 import com.orbit.diagnoses.dto.FastApiDiagnosisResponse;
 import com.orbit.diagnoses.exception.DiagnosisNotFoundException;
+import com.orbit.diagnoses.exception.InvalidDiagnosisResultException;
 import com.orbit.diagnoses.repository.DiagnosisRepository;
-import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -21,17 +19,21 @@ import tools.jackson.databind.ObjectMapper;
 public class DiagnosisService {
 
 	private final DiagnosisRepository diagnosisRepository;
-	private final FastApiDiagnosisClient fastApiDiagnosisClient;
 	private final ObjectMapper objectMapper;
 
-	public DiagnosisDetailResponse createDiagnosis(Long userId, DiagnosisRequest request) {
-		// FastAPI 호출 완료 후에만 저장을 수행한다(트랜잭션 없이) — 호출 실패 시 자연스럽게 미저장되고,
-		// 네트워크 대기 동안 DB 커넥션을 점유하지 않는다.
-		FastApiDiagnosisResponse response = fastApiDiagnosisClient.diagnose(request);
-		JsonNode result = response.raw();
+	@Transactional
+	public DiagnosisDetailResponse saveResult(Long userId, DiagnosisType type, JsonNode result) {
+		// 프론트가 받은 계산 응답을 검증 후 그대로 저장한다. 계산 서버를 호출하지 않는다.
+		FastApiDiagnosisResponse response;
+		try {
+			response = FastApiDiagnosisResponse.from(type, result);
+		} catch (IllegalArgumentException exception) {
+			throw new InvalidDiagnosisResultException(exception.getMessage());
+		}
 
 		Diagnosis diagnosis = Diagnosis.builder()
 			.userId(userId)
+			.diagnosisType(type)
 			.status(response.status())
 			.depletionAge(response.depletionAge())
 			.resultJson(result.toString())
@@ -43,17 +45,11 @@ public class DiagnosisService {
 	}
 
 	@Transactional(readOnly = true)
-	public List<DiagnosisSummaryResponse> getSummaries(Long userId) {
-		return diagnosisRepository.findByUserIdOrderByCreatedAtDesc(userId).stream()
-			.map(DiagnosisSummaryResponse::from)
-			.toList();
-	}
-
-	@Transactional(readOnly = true)
-	public DiagnosisDetailResponse getDetail(Long userId, Long id) {
-		Diagnosis diagnosis = diagnosisRepository.findByIdAndUserId(id, userId)
+	public DiagnosisDetailResponse getDetail(Long userId, Long id, DiagnosisType type) {
+		Diagnosis diagnosis = diagnosisRepository.findByIdAndUserIdAndDiagnosisType(id, userId, type)
 			.orElseThrow(DiagnosisNotFoundException::new);
 
+		// 저장 시 전달받은 결과 전체를 복원한다. 입력값으로 재계산하거나 필드를 재구성하지 않는다.
 		return DiagnosisDetailResponse.from(diagnosis, readResultJson(diagnosis.getResultJson()));
 	}
 
