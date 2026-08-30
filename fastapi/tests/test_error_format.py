@@ -111,7 +111,7 @@ def test_invalid_gender_enum_returns_unified_shape(client):
         ("/api/retirement/diagnosis", {"current_age": "abc"}),
         ("/api/retirement/recommendations", {"current_age": "abc"}),
         ("/api/retirement/reduction", {"current_age": "abc"}),
-        ("/api/retirement/scenarios", {"current_age": "abc"}),
+        ("/api/employees/scenarios", {"current_age": "abc"}),
         ("/api/employees/simulate", {"current_age": "abc"}),
     ],
 )

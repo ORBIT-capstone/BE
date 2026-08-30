@@ -76,7 +76,6 @@ class ReductionRequest(DiagnosisRequest):
     """진단(diagnosis)과 동일한 입력 스키마를 재사용하고 재취업 관련 필드를 추가"""
 
     reemployment_income: WonAmountInput = Field(ge=0)  # 재취업 예상 월소득 (원)
-    year: int | None = None  # 소득심사 기준 연도 (미지정 시 최신 규칙 적용)
 
 
 class ReductionResult(BaseModel):
@@ -94,6 +93,11 @@ class ReductionResult(BaseModel):
 
 class ScenariosRequest(DiagnosisRequest):
     """진단(diagnosis)과 동일한 입력 스키마를 재사용하고 수령방식 계산에 필요한 필드를 추가"""
+
+    monthly_pension: WonAmountInput | None = Field(
+        default=None, ge=0,
+        description="월연금(원). 생략/null이면 기준소득월액 × min(총 재직연수, 36) × 0.017로 추정한다. 0을 입력하면 그대로 사용한다.",
+    )
 
     early_years: float = Field(
         default=5, gt=0, le=5,
