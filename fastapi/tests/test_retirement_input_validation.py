@@ -60,7 +60,7 @@ def test_diagnosis_rejects_non_finite_money(value):
 
 def test_scenarios_rejects_invalid_service_years_at_schema_boundary(client):
     response = client.post(
-        "/api/retirement/scenarios",
+        "/api/employees/scenarios",
         json={
             **diagnosis_body(),
             "base_monthly_income": 3_000_000,

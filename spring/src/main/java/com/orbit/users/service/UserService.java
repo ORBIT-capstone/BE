@@ -48,7 +48,11 @@ public class UserService {
 		user.updateProfile(
 			request.name(),
 			request.birthDate(),
-			request.gender()
+			request.gender(),
+			request.asset(),
+			request.monthlyExpenses(),
+			request.currentYears(),
+			request.monthlyPension()
 		);
 
 		return user;

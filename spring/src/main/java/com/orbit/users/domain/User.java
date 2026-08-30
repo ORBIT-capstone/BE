@@ -43,6 +43,18 @@ public class User {
 	@Column(nullable = false, length = 20)
 	private Gender gender;
 
+	@Column(name = "asset")
+	private Long asset;
+
+	@Column(name = "monthly_expenses")
+	private Long monthlyExpenses;
+
+	@Column(name = "current_years")
+	private Integer currentYears;
+
+	@Column(name = "monthly_pension")
+	private Long monthlyPension;
+
 	@Builder
 	private User(
 		String email,
@@ -69,7 +81,11 @@ public class User {
 	public void updateProfile(
 		String name,
 		LocalDate birthDate,
-		Gender gender
+		Gender gender,
+		Long asset,
+		Long monthlyExpenses,
+		Integer currentYears,
+		Long monthlyPension
 	) {
 		if (name != null) {
 			this.name = name;
@@ -79,6 +95,18 @@ public class User {
 		}
 		if (gender != null) {
 			this.gender = gender;
+		}
+		if (asset != null) {
+			this.asset = asset;
+		}
+		if (monthlyExpenses != null) {
+			this.monthlyExpenses = monthlyExpenses;
+		}
+		if (currentYears != null) {
+			this.currentYears = currentYears;
+		}
+		if (monthlyPension != null) {
+			this.monthlyPension = monthlyPension;
 		}
 	}
 }

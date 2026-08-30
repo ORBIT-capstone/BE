@@ -8,6 +8,7 @@
 """
 
 import json
+from datetime import date as _real_date
 from pathlib import Path
 
 import pytest
@@ -16,6 +17,21 @@ from fastapi.testclient import TestClient
 from app.main import app
 
 GOLDEN_DIR = Path(__file__).parent / "golden"
+
+# tranche+α 지급률 모형(app/services/pension_rate_model.py)은 퇴직연월을 date.today()
+# 기준으로 계산한다 — 같은 요청이라도 호출 시점(오늘 날짜)에 따라 연도별 tranche
+# 요율이 달라지므로 monthly_pension이 달라진다(의도된 동작: "지금부터 몇 년 후
+# 퇴직하는가"를 매번 오늘 기준으로 다시 계산한다). 골든 스냅샷은 응답을 영구
+# 고정해야 하므로, employees_service/retirement_service가 보는 "오늘"을 고정값으로
+# 패치한다 — 그러지 않으면 이 테스트들은 매달(정확히는 tranche 연도 경계를
+# 지날 때마다) 이유 없이 실패한다.
+FIXED_TODAY = _real_date(2026, 1, 1)
+
+
+class _FixedDate(_real_date):
+    @classmethod
+    def today(cls) -> _real_date:  # type: ignore[override]
+        return FIXED_TODAY
 
 # retirement 계열 엔드포인트는 #1(금액 단위 통일)로 요청/응답이 만원 -> 원으로 바뀌었다.
 # 케이스가 나타내는 실제 시나리오(예: "월 생활비 250만원")는 그대로 유지하기 위해
@@ -128,10 +144,10 @@ CASES = [
             "reemployment_income": 99999 * WON_PER_MANWON,
         },
     },
-    # --- /api/retirement/scenarios ---
+    # --- /api/employees/scenarios ---
     {
         "name": "scenarios_basic",
-        "path": "/api/retirement/scenarios",
+        "path": "/api/employees/scenarios",
         "body": {
             "current_age": 60,
             "monthly_expenses": 250 * WON_PER_MANWON,
@@ -144,7 +160,7 @@ CASES = [
     },
     {
         "name": "scenarios_with_deduction_years",
-        "path": "/api/retirement/scenarios",
+        "path": "/api/employees/scenarios",
         "body": {
             "current_age": 60,
             "monthly_expenses": 250 * WON_PER_MANWON,
@@ -188,6 +204,12 @@ CASES = [
         },
     },
 ]
+
+
+@pytest.fixture(autouse=True)
+def _freeze_today(monkeypatch):
+    monkeypatch.setattr("app.services.employees_service.date", _FixedDate)
+    monkeypatch.setattr("app.services.retirement_service.date", _FixedDate)
 
 
 @pytest.fixture(scope="module")

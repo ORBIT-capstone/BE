@@ -3,16 +3,22 @@ import pytest
 from app.schemas.employees import CapBasis, SimulateRequest
 from app.services.employees_service import (
     PENSION_ELIGIBILITY_MONTHS,
-    PENSION_RATE,
     SEVERANCE_YEARS_CAP,
     _severance_rate,
     calculate_monthly_pension,
     simulate_employees,
 )
+from app.services.pension_rate_model import calculate_monthly_pension_tranche
 from app.services.service_cap_rules import (
     DEFAULT_MAX_CAP_MONTHS,
     resolve_pension_service_cap_months,
 )
+
+# 테스트용 임의 퇴직연월. tranche+α 모형은 퇴직연월 기준으로 요율을 적용하므로
+# 순수 함수 테스트에서는 값을 고정해 재현 가능하게 한다 — 프로덕션 코드는
+# date.today() 기반으로 실제 퇴직연월을 계산하며 이 상수와 무관하다
+# (app/services/employees_service.py::simulate_employees 참조).
+_FIXED_RETIRE_YYYYMM = 202401
 
 
 # --- service_cap_rules.resolve_pension_service_cap_months ---
@@ -62,24 +68,58 @@ def test_resolve_cap_tiered_boundaries(service_months_as_of_2016, expected_cap_m
 # --- employees_service.calculate_monthly_pension (순수 함수) ---
 
 
+def _expected_pension(income: float, capped_months: int, retire_yyyymm: int = _FIXED_RETIRE_YYYYMM) -> int:
+    """기대값도 tranche+α 모형에서 직접 가져온다 — 요율표를 테스트에 재타이핑하지 않는다.
+    이 테스트가 재는 것은 calculate_monthly_pension이 캡(min(retire_months, cap_months))을
+    올바르게 적용한 뒤 그 결과를 pension_rate_model에 정확히 위임하는지이지, tranche
+    요율표 자체의 값이 아니다(요율표 값은 tests/test_pension_rate_model.py가 검증한다).
+    """
+    return calculate_monthly_pension_tranche(income, retire_yyyymm, capped_months)
+
+
 def test_calculate_monthly_pension_below_eligibility_not_this_functions_concern():
     # calculate_monthly_pension 자체는 최소가입월수 분기를 모른다(simulate_employees가 처리) —
     # 캡만 적용해 그대로 계산한다는 걸 확인.
-    result = calculate_monthly_pension(base_income=3_000_000, retire_months=1, cap_months=432)
-    assert result == int(3_000_000 * (1 / 12) * PENSION_RATE)
+    result = calculate_monthly_pension(
+        base_income=3_000_000, retire_months=1, cap_months=432, retire_yyyymm=_FIXED_RETIRE_YYYYMM
+    )
+    assert result == _expected_pension(3_000_000, 1)
 
 
 def test_calculate_monthly_pension_cap_applies_exactly_at_boundary():
     income = 3_000_000
-    at_cap = calculate_monthly_pension(income, retire_months=396, cap_months=396)
-    over_cap = calculate_monthly_pension(income, retire_months=500, cap_months=396)
-    assert at_cap == over_cap == int(income * 33 * PENSION_RATE)
+    at_cap = calculate_monthly_pension(
+        income, retire_months=396, cap_months=396, retire_yyyymm=_FIXED_RETIRE_YYYYMM
+    )
+    over_cap = calculate_monthly_pension(
+        income, retire_months=500, cap_months=396, retire_yyyymm=_FIXED_RETIRE_YYYYMM
+    )
+    assert at_cap == over_cap == _expected_pension(income, 396)
 
 
 def test_calculate_monthly_pension_under_cap_uses_actual_months():
     income = 3_000_000
-    result = calculate_monthly_pension(income, retire_months=240, cap_months=432)
-    assert result == int(income * 20 * PENSION_RATE)
+    result = calculate_monthly_pension(
+        income, retire_months=240, cap_months=432, retire_yyyymm=_FIXED_RETIRE_YYYYMM
+    )
+    assert result == _expected_pension(income, 240)
+
+
+def test_calculate_monthly_pension_farther_retirement_uses_fewer_pre_2010_months():
+    # 퇴직연월이 미래로 갈수록(같은 재직월수라도) tranche 창이 뒤로 밀려 2009년
+    # 이전 구간(α 적용 구간, 상대적으로 유리한 고정요율 2.0%)에 걸치는 개월수가
+    # 줄어든다 — 이 모형이 미래 퇴직자에게 구조적으로 다르게(과거 실적에 고정되지
+    # 않고) 반응한다는 것을 확인한다.
+    income = 3_000_000
+    near = calculate_monthly_pension(
+        income, retire_months=432, cap_months=432, retire_yyyymm=201501
+    )
+    far = calculate_monthly_pension(
+        income, retire_months=432, cap_months=432, retire_yyyymm=205501
+    )
+    assert far == _expected_pension(income, 432, retire_yyyymm=205501)
+    assert near == _expected_pension(income, 432, retire_yyyymm=201501)
+    assert far != near
 
 
 # --- employees_service.simulate_employees (통합) ---
