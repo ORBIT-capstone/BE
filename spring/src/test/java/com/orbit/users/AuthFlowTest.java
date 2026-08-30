@@ -89,6 +89,55 @@ class AuthFlowTest {
 			.andExpect(status().isUnauthorized()).andExpect(jsonPath("$.code").value("UNAUTHORIZED"));
 	}
 
+	@Test
+	void optionalFinancialProfilePersistsAndPartialUpdatesPreserveValues() throws Exception {
+		String access = login().get("accessToken").asString();
+		String original = mockMvc.perform(get("/api/users/me").header("Authorization", "Bearer " + access))
+			.andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+		JsonNode initial = objectMapper.readTree(original);
+		org.junit.jupiter.api.Assertions.assertTrue(initial.get("asset").isNull());
+		org.junit.jupiter.api.Assertions.assertTrue(initial.get("monthlyExpenses").isNull());
+		org.junit.jupiter.api.Assertions.assertTrue(initial.get("currentYears").isNull());
+		org.junit.jupiter.api.Assertions.assertTrue(initial.get("monthlyPension").isNull());
+		mockMvc.perform(patch("/api/users/me").header("Authorization", "Bearer " + access)
+			.contentType(MediaType.APPLICATION_JSON).content("""
+				{"asset":100000000,"monthlyExpenses":2500000,"currentYears":20,"monthlyPension":1500000}
+				""")).andExpect(status().isOk()).andExpect(jsonPath("$.asset").value(100000000))
+			.andExpect(jsonPath("$.monthlyExpenses").value(2500000)).andExpect(jsonPath("$.currentYears").value(20))
+			.andExpect(jsonPath("$.monthlyPension").value(1500000));
+		mockMvc.perform(patch("/api/users/me").header("Authorization", "Bearer " + access)
+			.contentType(MediaType.APPLICATION_JSON).content("""
+				{"name":"수정이름","asset":null,"currentYears":0,"monthlyPension":null}
+				""")).andExpect(status().isOk());
+		mockMvc.perform(get("/api/users/me").header("Authorization", "Bearer " + access))
+			.andExpect(status().isOk()).andExpect(jsonPath("$.asset").value(100000000))
+			.andExpect(jsonPath("$.monthlyExpenses").value(2500000)).andExpect(jsonPath("$.currentYears").value(0))
+			.andExpect(jsonPath("$.name").value("수정이름"))
+			.andExpect(jsonPath("$.monthlyPension").value(1500000));
+		mockMvc.perform(patch("/api/users/me").header("Authorization", "Bearer " + access)
+			.contentType(MediaType.APPLICATION_JSON).content("""
+				{"monthlyPension":0}
+				""")).andExpect(status().isOk()).andExpect(jsonPath("$.monthlyPension").value(0));
+		mockMvc.perform(patch("/api/users/me").header("Authorization", "Bearer " + access)
+			.contentType(MediaType.APPLICATION_JSON).content("{}")).andExpect(status().isOk());
+		mockMvc.perform(get("/api/users/me").header("Authorization", "Bearer " + access))
+			.andExpect(status().isOk()).andExpect(jsonPath("$.monthlyPension").value(0));
+	}
+
+	@Test
+	void negativeFinancialProfileValuesAreRejectedWithoutChangingUser() throws Exception {
+		String access = login().get("accessToken").asString();
+		for (String field : java.util.List.of("asset", "monthlyExpenses", "currentYears", "monthlyPension")) {
+			mockMvc.perform(patch("/api/users/me").header("Authorization", "Bearer " + access)
+				.contentType(MediaType.APPLICATION_JSON).content("{\"" + field + "\":-1}"))
+				.andExpect(status().isBadRequest()).andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
+		}
+		String response = mockMvc.perform(get("/api/users/me").header("Authorization", "Bearer " + access))
+			.andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+		org.junit.jupiter.api.Assertions.assertTrue(objectMapper.readTree(response).get("asset").isNull());
+		org.junit.jupiter.api.Assertions.assertTrue(objectMapper.readTree(response).get("monthlyPension").isNull());
+	}
+
 	private JsonNode login() throws Exception {
 		String response = mockMvc.perform(post("/api/users/login").contentType(MediaType.APPLICATION_JSON).content("""
 			{"email":"%s","password":"password123"}
