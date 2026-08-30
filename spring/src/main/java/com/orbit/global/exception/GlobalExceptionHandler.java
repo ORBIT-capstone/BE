@@ -1,8 +1,7 @@
 package com.orbit.global.exception;
 
 import com.orbit.diagnoses.exception.DiagnosisNotFoundException;
-import com.orbit.diagnoses.exception.FastApiInvalidRequestException;
-import com.orbit.diagnoses.exception.FastApiUnavailableException;
+import com.orbit.diagnoses.exception.InvalidDiagnosisResultException;
 import com.orbit.users.exception.DuplicateEmailException;
 import com.orbit.users.exception.InvalidCredentialsException;
 import com.orbit.users.exception.InvalidTokenException;
@@ -85,16 +84,10 @@ public class GlobalExceptionHandler {
 			.body(ErrorResponse.of("DIAGNOSIS_NOT_FOUND", exception.getMessage()));
 	}
 
-	@ExceptionHandler(FastApiUnavailableException.class)
-	public ResponseEntity<ErrorResponse> handleFastApiUnavailable(FastApiUnavailableException exception) {
-		return ResponseEntity.status(HttpStatus.BAD_GATEWAY)
-			.body(ErrorResponse.of("FASTAPI_UNAVAILABLE", exception.getMessage()));
-	}
-
-	@ExceptionHandler(FastApiInvalidRequestException.class)
-	public ResponseEntity<ErrorResponse> handleFastApiInvalidRequest(FastApiInvalidRequestException exception) {
+	@ExceptionHandler(InvalidDiagnosisResultException.class)
+	public ResponseEntity<ErrorResponse> handleInvalidDiagnosisResult(InvalidDiagnosisResultException exception) {
 		return ResponseEntity.badRequest()
-			.body(exception.getErrorResponse());
+			.body(ErrorResponse.of("INVALID_DIAGNOSIS_RESULT", exception.getMessage()));
 	}
 
 	@ExceptionHandler(HttpRequestMethodNotSupportedException.class)

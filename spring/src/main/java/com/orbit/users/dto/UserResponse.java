@@ -17,7 +17,19 @@ public record UserResponse(
 	LocalDate birthDate,
 
 	@Schema(description = "성별", example = "MALE", allowableValues = {"MALE", "FEMALE"})
-	Gender gender
+	Gender gender,
+
+	@Schema(description = "보유 자산(원)", nullable = true)
+	Long asset,
+
+	@Schema(description = "월 지출액(원)", nullable = true)
+	Long monthlyExpenses,
+
+	@Schema(description = "현재 근속연수(년)", nullable = true)
+	Integer currentYears,
+
+	@Schema(description = "월 연금 수령액(원)", nullable = true)
+	Long monthlyPension
 ) {
 
 	public static UserResponse from(User user) {
@@ -25,7 +37,11 @@ public record UserResponse(
 			user.getEmail(),
 			user.getName(),
 			user.getBirthDate(),
-			user.getGender()
+			user.getGender(),
+			user.getAsset(),
+			user.getMonthlyExpenses(),
+			user.getCurrentYears(),
+			user.getMonthlyPension()
 		);
 	}
 }
