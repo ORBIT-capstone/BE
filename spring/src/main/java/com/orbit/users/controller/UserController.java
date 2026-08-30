@@ -76,7 +76,7 @@ public class UserController {
 
 	@PatchMapping("/me")
 	@SecurityRequirement(name = "bearerAuth")
-	@Operation(summary = "회원 정보 수정", description = "현재 로그인한 회원의 이름, 생년월일, 성별을 수정합니다.")
+	@Operation(summary = "회원 정보 수정", description = "이름, 생년월일, 성별, 보유 자산(원), 월 지출액(원), 현재 근속연수, 월 연금 수령액(원)을 선택적으로 수정합니다. 생략/null은 기존 값을 유지합니다.")
 	@ApiResponses({
 		@ApiResponse(responseCode = "400", description = "회원 정보 입력값 검증 실패", content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
 		@ApiResponse(responseCode = "401", description = "인증 정보가 없거나 유효하지 않음", content = @Content(schema = @Schema(implementation = ErrorResponse.class)))

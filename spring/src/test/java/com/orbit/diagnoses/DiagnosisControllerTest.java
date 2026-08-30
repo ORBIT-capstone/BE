@@ -1,300 +1,256 @@
 package com.orbit.diagnoses;
 
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.when;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+import static org.junit.jupiter.api.Assertions.*;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
-import com.orbit.diagnoses.client.FastApiDiagnosisClient;
-import com.orbit.diagnoses.dto.DiagnosisRequest;
-import com.orbit.diagnoses.dto.FastApiDiagnosisResponse;
-import com.orbit.diagnoses.exception.FastApiUnavailableException;
-import com.orbit.diagnoses.exception.FastApiInvalidRequestException;
-import com.orbit.global.exception.ErrorDetail;
-import com.orbit.global.exception.ErrorResponse;
-import java.time.OffsetDateTime;
-import java.util.List;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
+import com.orbit.diagnoses.domain.DiagnosisType;
+import com.orbit.diagnoses.repository.DiagnosisRepository;
+import com.orbit.users.repository.UserRepository;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.*;
+import org.junit.jupiter.api.*;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.http.MediaType;
-import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.node.ObjectNode;
 
 @SpringBootTest(properties = {
-	"spring.datasource.url=jdbc:h2:mem:diagnoses-test;MODE=MySQL;DB_CLOSE_DELAY=-1",
-	"spring.datasource.driver-class-name=org.h2.Driver",
-	"spring.datasource.username=sa",
-	"spring.datasource.password=",
-	"spring.jpa.hibernate.ddl-auto=create-drop",
-	"spring.jpa.database-platform=org.hibernate.dialect.H2Dialect",
-	"fastapi.base-url=http://localhost:0"
+    "spring.datasource.url=jdbc:h2:mem:diagnoses-test;MODE=MySQL;DB_CLOSE_DELAY=-1",
+    "spring.datasource.driver-class-name=org.h2.Driver",
+    "spring.datasource.username=sa", "spring.datasource.password=",
+    "spring.jpa.hibernate.ddl-auto=create-drop",
+    "spring.jpa.database-platform=org.hibernate.dialect.H2Dialect",
+    // 계산 서버가 없어도 저장과 조회가 성공해야 한다.
+    "fastapi.base-url=http://127.0.0.1:1"
 })
 @AutoConfigureMockMvc
 class DiagnosisControllerTest {
+    @Autowired MockMvc mockMvc;
+    @Autowired ObjectMapper mapper;
+    @Autowired DiagnosisRepository diagnoses;
+    @Autowired UserRepository users;
+    @Autowired org.springframework.jdbc.core.JdbcTemplate jdbc;
+    String token;
+    String email;
 
-	private static final String DIAGNOSIS_REQUEST_BODY = """
-		{
-		  "currentAge": 60,
-		  "monthlyExpenses": 2500000,
-		  "monthlyPension": 1500000,
-		  "asset": 100000000,
-		  "gender": "MALE"
-		}
-		""";
+    @BeforeEach
+    void setup() throws Exception {
+        email = "diagnosis-" + System.nanoTime() + "@example.com";
+        token = signupAndLogin(email);
+    }
 
-	@Autowired
-	private MockMvc mockMvc;
+    String signupAndLogin(String address) throws Exception {
+        mockMvc.perform(post("/api/users/signup").contentType(MediaType.APPLICATION_JSON).content("""
+            {"email":"%s","password":"password123","name":"홍길동","birthDate":"1965-01-01","gender":"MALE"}
+            """.formatted(address))).andExpect(status().isCreated());
+        String body = mockMvc.perform(post("/api/users/login").contentType(MediaType.APPLICATION_JSON).content("""
+            {"email":"%s","password":"password123"}
+            """.formatted(address))).andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        return mapper.readTree(body).get("accessToken").asString();
+    }
 
-	@Autowired
-	private ObjectMapper objectMapper;
+    String path(DiagnosisType type) {
+        return "/api/diagnoses/" + switch (type) {
+            case RETIREMENT_ASSET -> "retirement/diagnosis";
+            case PENSION_REDUCTION -> "retirement/reduction";
+            case RETIREMENT_RECOMMENDATION -> "retirement/recommendations";
+            case EMPLOYEE_PENSION -> "employees/simulate";
+            case RECEIPT_SCENARIOS -> "employees/scenarios";
+        };
+    }
 
-	@MockitoBean
-	private FastApiDiagnosisClient fastApiDiagnosisClient;
+    ObjectNode result(DiagnosisType type) throws Exception {
+        String fixture = switch (type) {
+            case RETIREMENT_ASSET -> "diagnosis_insufficient";
+            case PENSION_REDUCTION -> "reduction_partial";
+            case RETIREMENT_RECOMMENDATION -> "recommendations_saving_only";
+            case EMPLOYEE_PENSION -> "simulate_normal";
+            case RECEIPT_SCENARIOS -> "scenarios_basic";
+        };
+        // 실제 계산 API의 회귀 테스트 응답을 사용하여 저장 계약이 FastAPI와 일치하는지 검증한다.
+        return (ObjectNode) mapper.readTree(Files.readString(
+            Path.of("..", "fastapi", "tests", "golden", fixture + ".json"))).get("body");
+    }
 
-	private String accessToken;
+    long save(DiagnosisType type, JsonNode body) throws Exception {
+        String json = mockMvc.perform(post(path(type)).header("Authorization", "Bearer " + token)
+            .contentType(MediaType.APPLICATION_JSON).content(body.toString()))
+            .andExpect(status().isCreated()).andExpect(jsonPath("$.diagnosisType").value(type.name()))
+            .andExpect(jsonPath("$.createdAt").exists())
+            .andReturn().getResponse().getContentAsString();
+        JsonNode saved = mapper.readTree(json);
+        assertEquals(body, saved.get("result"));
+        if (type == DiagnosisType.EMPLOYEE_PENSION || type == DiagnosisType.RECEIPT_SCENARIOS) {
+            assertTrue(saved.get("status").isNull());
+            assertTrue(saved.get("depletionAge").isNull());
+        } else {
+            assertEquals(body.get("status"), saved.get("status"));
+            assertEquals(body.get("depletion_age"), saved.get("depletionAge"));
+        }
+        return saved.get("id").asLong();
+    }
 
-	@BeforeEach
-	void signUpAndLogIn() throws Exception {
-		String email = "diagnosis-test-" + System.nanoTime() + "@example.com";
+    JsonNode getResult(DiagnosisType type, long id) throws Exception {
+        String json = mockMvc.perform(get(path(type) + "/" + id).header("Authorization", "Bearer " + token))
+            .andExpect(status().isOk()).andExpect(jsonPath("$.diagnosisType").value(type.name()))
+            .andReturn().getResponse().getContentAsString();
+        return mapper.readTree(json).get("result");
+    }
 
-		mockMvc.perform(post("/api/users/signup")
-				.contentType(MediaType.APPLICATION_JSON)
-				.content("""
-					{
-					  "email": "%s",
-					  "password": "password123",
-					  "name": "홍길동",
-					  "birthDate": "1965-01-01",
-					  "gender": "MALE",
-					  "employmentStatus": "retirees"
-					}
-					""".formatted(email)))
-			.andExpect(status().isCreated());
+    @ParameterizedTest
+    @EnumSource(DiagnosisType.class)
+    void savesAndRetrievesCompleteCalculationResponseWithoutCalculationServer(DiagnosisType type) throws Exception {
+        JsonNode body = result(type);
+        long id = save(type, body);
+        assertEquals(body, getResult(type, id));
+        JsonNode stored = mapper.readTree(diagnoses.findById(id).orElseThrow().getResultJson());
+        assertEquals(body, stored.isString() ? mapper.readTree(stored.asString()) : stored);
 
-		String loginResponse = mockMvc.perform(post("/api/users/login")
-				.contentType(MediaType.APPLICATION_JSON)
-				.content("""
-					{
-					  "email": "%s",
-					  "password": "password123"
-					}
-					""".formatted(email)))
-			.andExpect(status().isOk())
-			.andReturn()
-			.getResponse()
-			.getContentAsString();
+        DiagnosisType wrong = type == DiagnosisType.RETIREMENT_ASSET
+            ? DiagnosisType.EMPLOYEE_PENSION : DiagnosisType.RETIREMENT_ASSET;
+        mockMvc.perform(get(path(wrong) + "/" + id).header("Authorization", "Bearer " + token))
+            .andExpect(status().isNotFound());
+        String other = signupAndLogin("other-" + System.nanoTime() + "@example.com");
+        mockMvc.perform(get(path(type) + "/" + id).header("Authorization", "Bearer " + other))
+            .andExpect(status().isNotFound());
+    }
 
-		accessToken = objectMapper.readTree(loginResponse).get("accessToken").asString();
-	}
+    @ParameterizedTest
+    @EnumSource(DiagnosisType.class)
+    void preservesExtraResultFieldsWithoutOverridingOwnerOrType(DiagnosisType type) throws Exception {
+        ObjectNode body = result(type);
+        body.putObject("display_metadata").put("label", "프론트에 표시한 원본 결과");
+        body.put("userId", -1);
+        body.put("diagnosisType", "OTHER_TYPE");
+        long id = save(type, body);
+        assertEquals(body, getResult(type, id));
+        assertEquals(users.findByEmail(email).orElseThrow().getId(), diagnoses.findById(id).orElseThrow().getUserId());
+        assertEquals(type, diagnoses.findById(id).orElseThrow().getDiagnosisType());
+    }
 
-	private FastApiDiagnosisResponse fastApiResult(int depletionAge, String status) throws Exception {
-		return FastApiDiagnosisResponse.from(objectMapper.readTree("""
-			{
-			  "current_age": 60,
-			  "monthly_gap": 1000000,
-			  "depletion_age": %d,
-			  "depleted": true,
-			  "target_age": 84,
-			  "status": "%s",
-			  "timeline": [
-			    {"age": 60, "asset": 100000000, "annual_income": 18000000, "annual_expense": 30000000, "annual_gap": 12000000, "cumulative_annual_gap": 12000000}
-			  ]
-			}
-			""".formatted(depletionAge, status)));
-	}
+    @ParameterizedTest
+    @EnumSource(DiagnosisType.class)
+    void rejectsUnauthenticatedSaveAndRead(DiagnosisType type) throws Exception {
+        mockMvc.perform(post(path(type)).contentType(MediaType.APPLICATION_JSON)
+            .content(result(type).toString())).andExpect(status().isUnauthorized());
+        mockMvc.perform(get(path(type) + "/1")).andExpect(status().isUnauthorized());
+    }
 
-	@Test
-	void createDiagnosisSavesAndReturnsDetailWithId() throws Exception {
-		FastApiDiagnosisResponse result = fastApiResult(75, "INSUFFICIENT");
-		when(fastApiDiagnosisClient.diagnose(any(DiagnosisRequest.class))).thenReturn(result);
+    @Test
+    void oldRoutesAreRemoved() throws Exception {
+        mockMvc.perform(get("/api/diagnoses")).andExpect(status().isNotFound());
+        mockMvc.perform(get("/api/diagnoses/1")).andExpect(status().isNotFound());
+        mockMvc.perform(post("/api/diagnoses").contentType(MediaType.APPLICATION_JSON).content("{}"))
+            .andExpect(status().isNotFound());
+    }
 
-		mockMvc.perform(post("/api/diagnoses")
-				.header("Authorization", "Bearer " + accessToken)
-				.contentType(MediaType.APPLICATION_JSON)
-				.content(DIAGNOSIS_REQUEST_BODY))
-			.andExpect(status().isCreated())
-			.andExpect(jsonPath("$.status").value("INSUFFICIENT"))
-			.andExpect(jsonPath("$.id").isNumber())
-			.andExpect(jsonPath("$.depletionAge").value(75))
-			.andExpect(jsonPath("$.createdAt").exists())
-			.andExpect(jsonPath("$.result.status").value("INSUFFICIENT"))
-			.andExpect(jsonPath("$.result.depletion_age").value(75))
-			.andExpect(jsonPath("$.result.timeline[0].age").value(60));
-	}
+    @ParameterizedTest
+    @EnumSource(DiagnosisType.class)
+    void rejectsCalculationInputsAndWrappedResultsInsteadOfSavingThem(DiagnosisType type) throws Exception {
+        long count = diagnoses.count();
+        String inputs = """
+            {"currentAge":60,"monthlyExpenses":2500000,"monthlyPension":1500000,"asset":100000000,
+             "gender":"MALE","currentYears":20,"currentIncome":4000000,"retireAtAge":65,
+             "reemploymentIncome":4000000,"baseMonthlyIncome":3000000,"totalServiceYears":25}
+            """;
+        for (String body : List.of(inputs, "{}", "[]", "123", "{\"result\":" + result(type) + "}")) {
+            mockMvc.perform(post(path(type)).header("Authorization", "Bearer " + token)
+                .contentType(MediaType.APPLICATION_JSON).content(body))
+                .andExpect(status().isBadRequest()).andExpect(jsonPath("$.code").value("INVALID_DIAGNOSIS_RESULT"));
+        }
+        assertEquals(count, diagnoses.count());
+    }
 
-	@Test
-	void listAndGetDiagnosisFlowWorks() throws Exception {
-		FastApiDiagnosisResponse result = fastApiResult(80, "MIDDLE");
-		when(fastApiDiagnosisClient.diagnose(any(DiagnosisRequest.class))).thenReturn(result);
+    @ParameterizedTest
+    @EnumSource(DiagnosisType.class)
+    void rejectsMissingOrMalformedResultFieldsWithoutSaving(DiagnosisType type) throws Exception {
+        long count = diagnoses.count();
+        ObjectNode body = result(type);
+        String field = type == DiagnosisType.EMPLOYEE_PENSION ? "monthly_pension"
+            : type == DiagnosisType.RECEIPT_SCENARIOS ? "scenarios" : "timeline";
+        body.remove(field);
+        mockMvc.perform(post(path(type)).header("Authorization", "Bearer " + token)
+            .contentType(MediaType.APPLICATION_JSON).content(body.toString()))
+            .andExpect(status().isBadRequest());
+        body.put(field, "invalid");
+        mockMvc.perform(post(path(type)).header("Authorization", "Bearer " + token)
+            .contentType(MediaType.APPLICATION_JSON).content(body.toString()))
+            .andExpect(status().isBadRequest());
+        assertEquals(count, diagnoses.count());
+    }
 
-		String createResponse = mockMvc.perform(post("/api/diagnoses")
-				.header("Authorization", "Bearer " + accessToken)
-				.contentType(MediaType.APPLICATION_JSON)
-				.content(DIAGNOSIS_REQUEST_BODY))
-			.andExpect(status().isCreated())
-			.andReturn()
-			.getResponse()
-			.getContentAsString();
-		// 생성 응답의 ID로 목록 및 상세 조회 결과를 연계한다.
-		Long id = objectMapper.readTree(createResponse).get("id").asLong();
+    @Test
+    void rejectsInconsistentNestedScenarioAndTimelineFields() throws Exception {
+        long count = diagnoses.count();
+        ObjectNode scenarios = result(DiagnosisType.RECEIPT_SCENARIOS);
+        ObjectNode scenario = (ObjectNode) scenarios.get("scenarios").get(0);
+        scenario.putNull("depletion_age");
+        scenario.put("depleted", true);
+        mockMvc.perform(post(path(DiagnosisType.RECEIPT_SCENARIOS)).header("Authorization", "Bearer " + token)
+            .contentType(MediaType.APPLICATION_JSON).content(scenarios.toString()))
+            .andExpect(status().isBadRequest());
+        ObjectNode reduction = result(DiagnosisType.PENSION_REDUCTION);
+        ((ObjectNode) reduction.get("timeline").get(0)).remove("annual_income");
+        mockMvc.perform(post(path(DiagnosisType.PENSION_REDUCTION)).header("Authorization", "Bearer " + token)
+            .contentType(MediaType.APPLICATION_JSON).content(reduction.toString()))
+            .andExpect(status().isBadRequest());
+        assertEquals(count, diagnoses.count());
+    }
 
-		String listResponse = mockMvc.perform(get("/api/diagnoses")
-				.header("Authorization", "Bearer " + accessToken))
-			.andExpect(status().isOk())
-			.andExpect(jsonPath("$[0].status").value("MIDDLE"))
-			.andExpect(jsonPath("$[0].depletionAge").value(80))
-			.andReturn()
-			.getResponse()
-			.getContentAsString();
+    @Test
+    void nullDepletionAndZeroAmountsRoundTripUnchanged() throws Exception {
+        ObjectNode body = result(DiagnosisType.PENSION_REDUCTION);
+        body.putNull("depletion_age");
+        body.put("depleted", false);
+        body.put("status", "SUFFICIENT");
+        body.put("monthly_reduction", 0);
+        body.put("reemployment_income", 0);
+        long id = save(DiagnosisType.PENSION_REDUCTION, body);
+        assertEquals(body, getResult(DiagnosisType.PENSION_REDUCTION, id));
+    }
 
-		org.junit.jupiter.api.Assertions.assertEquals(
-			id.longValue(),
-			objectMapper.readTree(listResponse).get(0).get("id").asLong()
-		);
+    @Test
+    void legacySavedCalculationResultsRemainReadable() throws Exception {
+        Long userId = users.findByEmail(email).orElseThrow().getId();
+        JsonNode body = result(DiagnosisType.RETIREMENT_ASSET);
+        jdbc.update("INSERT INTO diagnoses (user_id, status, depletion_age, result_json, created_at) VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)",
+            userId, body.get("status").asString(), body.get("depletion_age").asInt(), body.toString());
+        Long id = jdbc.queryForObject("SELECT id FROM diagnoses WHERE user_id = ?", Long.class, userId);
+        assertEquals(body, getResult(DiagnosisType.RETIREMENT_ASSET, id));
+    }
 
-		mockMvc.perform(get("/api/diagnoses/" + id)
-				.header("Authorization", "Bearer " + accessToken))
-			.andExpect(status().isOk())
-			.andExpect(jsonPath("$.id").value(id))
-			.andExpect(jsonPath("$.status").value("MIDDLE"))
-			.andExpect(jsonPath("$.depletionAge").value(80))
-			.andExpect(jsonPath("$.result.status").value("MIDDLE"))
-			.andExpect(jsonPath("$.result.timeline[0].age").value(60));
-	}
+    @Test
+    void invalidAndUnknownIdsAreRejected() throws Exception {
+        for (DiagnosisType type : DiagnosisType.values()) {
+            mockMvc.perform(get(path(type) + "/abc").header("Authorization", "Bearer " + token))
+                .andExpect(status().isBadRequest());
+            mockMvc.perform(get(path(type) + "/999999").header("Authorization", "Bearer " + token))
+                .andExpect(status().isNotFound());
+        }
+    }
 
-	@Test
-	void createDiagnosisWithoutAuthorizationReturns401() throws Exception {
-		mockMvc.perform(post("/api/diagnoses")
-				.contentType(MediaType.APPLICATION_JSON)
-				.content(DIAGNOSIS_REQUEST_BODY))
-			.andExpect(status().isUnauthorized());
-	}
-
-	@Test
-	void listDiagnosesWithoutAuthorizationReturns401() throws Exception {
-		mockMvc.perform(get("/api/diagnoses"))
-			.andExpect(status().isUnauthorized());
-	}
-
-	@Test
-	void getDiagnosisOfAnotherUserReturns404() throws Exception {
-		FastApiDiagnosisResponse result = fastApiResult(80, "MIDDLE");
-		when(fastApiDiagnosisClient.diagnose(any(DiagnosisRequest.class))).thenReturn(result);
-
-		String createResponse = mockMvc.perform(post("/api/diagnoses")
-				.header("Authorization", "Bearer " + accessToken)
-				.contentType(MediaType.APPLICATION_JSON)
-				.content(DIAGNOSIS_REQUEST_BODY))
-			.andExpect(status().isCreated())
-			.andReturn()
-			.getResponse()
-			.getContentAsString();
-		org.junit.jupiter.api.Assertions.assertNotNull(createResponse);
-
-		String listResponse = mockMvc.perform(get("/api/diagnoses")
-				.header("Authorization", "Bearer " + accessToken))
-			.andReturn()
-			.getResponse()
-			.getContentAsString();
-		Long id = objectMapper.readTree(listResponse).get(0).get("id").asLong();
-
-		// 다른 유저로 새로 가입/로그인
-		String otherEmail = "other-user-" + System.nanoTime() + "@example.com";
-		mockMvc.perform(post("/api/users/signup")
-				.contentType(MediaType.APPLICATION_JSON)
-				.content("""
-					{
-					  "email": "%s",
-					  "password": "password123",
-					  "name": "다른유저",
-					  "birthDate": "1970-01-01",
-					  "gender": "FEMALE",
-					  "employmentStatus": "retirees"
-					}
-					""".formatted(otherEmail)))
-			.andExpect(status().isCreated());
-
-		String otherLoginResponse = mockMvc.perform(post("/api/users/login")
-				.contentType(MediaType.APPLICATION_JSON)
-				.content("""
-					{
-					  "email": "%s",
-					  "password": "password123"
-					}
-					""".formatted(otherEmail)))
-			.andReturn()
-			.getResponse()
-			.getContentAsString();
-		String otherAccessToken = objectMapper.readTree(otherLoginResponse).get("accessToken").asString();
-
-		mockMvc.perform(get("/api/diagnoses/" + id)
-				.header("Authorization", "Bearer " + otherAccessToken))
-			.andExpect(status().isNotFound())
-			.andExpect(jsonPath("$.code").value("DIAGNOSIS_NOT_FOUND"));
-	}
-
-	@Test
-	void getNonExistentDiagnosisReturns404() throws Exception {
-		mockMvc.perform(get("/api/diagnoses/999999")
-				.header("Authorization", "Bearer " + accessToken))
-			.andExpect(status().isNotFound())
-			.andExpect(jsonPath("$.code").value("DIAGNOSIS_NOT_FOUND"));
-	}
-
-	@Test
-	void getDiagnosisWithNonNumericIdReturns400() throws Exception {
-		mockMvc.perform(get("/api/diagnoses/abc")
-				.header("Authorization", "Bearer " + accessToken))
-			.andExpect(status().isBadRequest())
-			.andExpect(jsonPath("$.code").value("INVALID_REQUEST"));
-	}
-
-	@Test
-	void createDiagnosisReturns502WhenFastApiFails() throws Exception {
-		when(fastApiDiagnosisClient.diagnose(any(DiagnosisRequest.class)))
-			.thenThrow(new FastApiUnavailableException(new RuntimeException("connection refused")));
-
-		mockMvc.perform(post("/api/diagnoses")
-				.header("Authorization", "Bearer " + accessToken)
-				.contentType(MediaType.APPLICATION_JSON)
-				.content(DIAGNOSIS_REQUEST_BODY))
-			.andExpect(status().isBadGateway())
-			.andExpect(jsonPath("$.code").value("FASTAPI_UNAVAILABLE"));
-
-		mockMvc.perform(get("/api/diagnoses")
-				.header("Authorization", "Bearer " + accessToken))
-			.andExpect(status().isOk())
-			.andExpect(jsonPath("$.length()").value(0));
-	}
-
-	@Test
-	void createDiagnosisReturns400WhenFastApiRejectsInput() throws Exception {
-		OffsetDateTime fastApiTimestamp = OffsetDateTime.parse("2026-08-04T12:34:56Z");
-		ErrorResponse fastApiError = new ErrorResponse(
-			"VALIDATION_ERROR",
-			"정수여야 합니다.",
-			List.of(new ErrorDetail("current_age", "정수여야 합니다.")),
-			fastApiTimestamp
-		);
-		when(fastApiDiagnosisClient.diagnose(any(DiagnosisRequest.class)))
-			.thenThrow(new FastApiInvalidRequestException(fastApiError, new RuntimeException("bad request")));
-
-		mockMvc.perform(post("/api/diagnoses")
-				.header("Authorization", "Bearer " + accessToken)
-				.contentType(MediaType.APPLICATION_JSON)
-				.content(DIAGNOSIS_REQUEST_BODY))
-			.andExpect(status().isBadRequest())
-			.andExpect(jsonPath("$.code").value("VALIDATION_ERROR"))
-			.andExpect(jsonPath("$.message").value("정수여야 합니다."))
-			.andExpect(jsonPath("$.details[0].field").value("current_age"))
-			.andExpect(jsonPath("$.details[0].reason").value("정수여야 합니다."))
-			.andExpect(jsonPath("$.timestamp").value(fastApiTimestamp.toString()));
-	}
+    @Test
+    void openApiDocumentsResponseBodiesAsSaveRequests() throws Exception {
+        String json = mockMvc.perform(get("/api/v3/api-docs")).andExpect(status().isOk())
+            .andReturn().getResponse().getContentAsString();
+        JsonNode api = mapper.readTree(json);
+        for (DiagnosisType type : DiagnosisType.values()) {
+            JsonNode operation = api.get("paths").get(path(type)).get("post");
+            String ref = operation.get("requestBody").get("content").get("application/json").get("schema").get("$ref").asString();
+            JsonNode schema = api.get("components").get("schemas").get(ref.substring(ref.lastIndexOf('/') + 1));
+            for (String field : result(type).propertyNames()) {
+                assertTrue(schema.get("properties").has(field), type + ": " + field);
+            }
+            assertFalse(schema.get("properties").has("currentAge"));
+            assertFalse(operation.get("responses").has("502"));
+        }
+    }
 }

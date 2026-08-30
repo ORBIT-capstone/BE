@@ -27,6 +27,7 @@ TARGET_AGE_FEMALE = 88  # 여성 목표연령 (통계청 생명표 60세 기대�
 SAVING_CAP_RATIO = 0.3  # 절약 상한 비율 (월 생활비 대비)
 SEARCH_PRECISION = 0.01  # 이진탐색 종료 정밀도 (만원)
 MAX_REDUCTION_RATIO = 0.5  # 감액 상한 비율 (노령연금액의 1/2 초과 감액 불가)
+REDUCTION_RULE_YEAR = 2025  # 재취업 연금 감액 계산의 고정 기준연도
 EARLY_REDUCTION_RATE_PER_YEAR = 0.05  # 조기수령 미달연수 1년당 감액률 (사학연금 조기퇴직연금 기준, 평생 적용)
 EARLY_YEARS_MAX = 5  # 조기수령 최대 미달연수 (5년 초과는 조기수령 대상이 아님 -> 유효성 에러)
 LUMP_SUM_SQUARE_FACTOR = 65 / 10000  # 공제일시금 2차 계수 (공제연수 제곱 가산분, 사학연금공단 공제일시금 산식)
@@ -243,9 +244,8 @@ def simulate_pension_reduction(
     asset: float,
     gender: Gender,
     reemployment_income: float,
-    year: int | None = None,
 ) -> ReductionResult:
-    """재취업 예상 월소득에 따른 국민연금 소득심사 감액을 계산하고,
+    """2025년 기준으로 재취업 예상 월소득에 따른 국민연금 소득심사 감액을 계산하고,
     감액된 연금으로 diagnose_core()를 통해 timeline을 재계산한다.
     자산 시뮬레이션 로직은 diagnose_core()에 전적으로 위임하며, 여기서는
     감액 산식(reduction_rules)만 계산한다.
@@ -253,7 +253,7 @@ def simulate_pension_reduction(
     if reemployment_income < 0:
         raise DomainValidationError("reemployment_income은 0 이상이어야 합니다.")
 
-    rule = get_reduction_rule(year)
+    rule = get_reduction_rule(REDUCTION_RULE_YEAR)
     excess_income = max(0.0, reemployment_income - rule.threshold)
     raw_reduction = calculate_bracket_reduction(excess_income, rule.rate_brackets)
     monthly_reduction = min(raw_reduction, monthly_pension * MAX_REDUCTION_RATIO)
@@ -385,7 +385,7 @@ def _early_reduction_rate(early_years: float) -> float:
 def simulate_scenarios(
     current_age: int,
     monthly_expenses: float,
-    monthly_pension: float,
+    monthly_pension: float | None,
     asset: float,
     gender: Gender,
     base_monthly_income: float,
@@ -397,7 +397,8 @@ def simulate_scenarios(
     순차(동기 for 루프)로 실행하고 비교한다. 자산 시뮬레이션 로직은 diagnose_core()에
     전적으로 위임하며, 방식별 monthly_pension/asset 조합만 여기서 계산한다.
 
-    NORMAL/EARLY는 입력된 monthly_pension을 그대로 사용하고, LUMP_SUM/SPLIT는
+    NORMAL/EARLY는 입력된 monthly_pension을 사용한다. None이면 기준소득월액과
+    상한 적용 재직연수로 정상 월연금을 추정한다. LUMP_SUM/SPLIT는
     기준소득월액(base_monthly_income)·총재직연수(total_service_years) 기반
     공제일시금 산식(_calculate_lump_sum_and_pension)으로 재계산한다.
     총 수령액은 모든 시나리오에 대해 동일하게 current_age~MAX_AGE 기간으로 합산한다.
@@ -417,6 +418,11 @@ def simulate_scenarios(
         raise DomainValidationError(f"early_years는 0보다 크고 {EARLY_YEARS_MAX} 이하여야 합니다.")
     if total_service_years <= 0:
         raise DomainValidationError("total_service_years는 0보다 커야 합니다.")
+
+    if monthly_pension is None:
+        _, monthly_pension = _calculate_lump_sum_and_pension(
+            base_monthly_income, total_service_years, 0
+        )
 
     # LUMP_SUM: 전액 공제(공제연수=총재직연수) -> 연금 선택 연수 0, 공제일시금 산식만 남음
     full_lump_sum, full_pension = _calculate_lump_sum_and_pension(

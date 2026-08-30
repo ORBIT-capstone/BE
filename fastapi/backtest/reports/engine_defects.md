@@ -68,7 +68,7 @@
   (`test_calculate_lump_sum_and_pension_applies_cap_before_deduction_not_after`)를
   추가했다.
 - **영향 범위**: A(퇴직연금) baseline/Tier1 채점 경로(employees_service.py 기반)와는
-  무관한 별도 엔드포인트(`/api/retirement/scenarios`)라 `defect_fix_comparison.md`의
+  무관한 별도 엔드포인트(`/api/employees/scenarios`)라 `defect_fix_comparison.md`의
   수치에는 영향이 없다 — 실측으로 확인함(표 B의 baseline BEFORE/AFTER가 완전히
   동일함).
 - **테스트**: `tests/test_retirement_service.py`에 상한 초과 케이스, 순서 검증 케이스,

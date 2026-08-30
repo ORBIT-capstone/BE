@@ -2,6 +2,11 @@ package com.orbit.diagnoses.domain;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
+import org.hibernate.annotations.ColumnDefault;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
@@ -29,7 +34,13 @@ public class Diagnosis {
 	@Column(name = "user_id", nullable = false)
 	private Long userId;
 
-	@Column(nullable = false, length = 20)
+	@Enumerated(EnumType.STRING)
+	@JdbcTypeCode(SqlTypes.VARCHAR)
+	@Column(name = "diagnosis_type", nullable = false, length = 40)
+	@ColumnDefault("'RETIREMENT_ASSET'")
+	private DiagnosisType diagnosisType;
+
+	@Column(length = 20)
 	private String status;
 
 	@Column(name = "depletion_age")
@@ -42,8 +53,9 @@ public class Diagnosis {
 	private LocalDateTime createdAt;
 
 	@Builder
-	private Diagnosis(Long userId, String status, Integer depletionAge, String resultJson) {
+	private Diagnosis(Long userId, DiagnosisType diagnosisType, String status, Integer depletionAge, String resultJson) {
 		this.userId = userId;
+		this.diagnosisType = diagnosisType == null ? DiagnosisType.RETIREMENT_ASSET : diagnosisType;
 		this.status = status;
 		this.depletionAge = depletionAge;
 		this.resultJson = resultJson;
