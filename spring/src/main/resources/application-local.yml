@@ -21,3 +21,6 @@ fastapi:
 auth:
   token:
     secret: ${AUTH_TOKEN_SECRET:orbit-local-token-secret-change-me}
+
+cors:
+  allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:5173}
