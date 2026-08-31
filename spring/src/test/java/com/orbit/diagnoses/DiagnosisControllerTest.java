@@ -145,10 +145,54 @@ class DiagnosisControllerTest {
     }
 
     @Test
-    void oldRoutesAreRemoved() throws Exception {
-        mockMvc.perform(get("/api/diagnoses")).andExpect(status().isNotFound());
-        mockMvc.perform(get("/api/diagnoses/1")).andExpect(status().isNotFound());
+    void unifiedCreateRouteIsRemoved() throws Exception {
         mockMvc.perform(post("/api/diagnoses").contentType(MediaType.APPLICATION_JSON).content("{}"))
+            .andExpect(status().isMethodNotAllowed());
+    }
+
+    @Test
+    void unauthenticatedListAndDetailAreRejected() throws Exception {
+        mockMvc.perform(get("/api/diagnoses")).andExpect(status().isUnauthorized());
+        mockMvc.perform(get("/api/diagnoses/1")).andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void listReturnsAllOwnedDiagnosesAcrossTypesNewestFirstWithoutResultBody() throws Exception {
+        long firstId = save(DiagnosisType.RETIREMENT_ASSET, result(DiagnosisType.RETIREMENT_ASSET));
+        long secondId = save(DiagnosisType.EMPLOYEE_PENSION, result(DiagnosisType.EMPLOYEE_PENSION));
+
+        String other = signupAndLogin("other-" + System.nanoTime() + "@example.com");
+        mockMvc.perform(post(path(DiagnosisType.RETIREMENT_ASSET)).header("Authorization", "Bearer " + other)
+            .contentType(MediaType.APPLICATION_JSON).content(result(DiagnosisType.RETIREMENT_ASSET).toString()))
+            .andExpect(status().isCreated());
+
+        String json = mockMvc.perform(get("/api/diagnoses").header("Authorization", "Bearer " + token))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.length()").value(2))
+            .andExpect(jsonPath("$[0].id").value(secondId))
+            .andExpect(jsonPath("$[0].result").doesNotExist())
+            .andExpect(jsonPath("$[1].id").value(firstId))
+            .andReturn().getResponse().getContentAsString();
+        JsonNode list = mapper.readTree(json);
+        assertEquals(DiagnosisType.EMPLOYEE_PENSION.name(), list.get(0).get("diagnosisType").asString());
+        assertEquals(DiagnosisType.RETIREMENT_ASSET.name(), list.get(1).get("diagnosisType").asString());
+    }
+
+    @ParameterizedTest
+    @EnumSource(DiagnosisType.class)
+    void unifiedDetailReturnsOwnedResultRegardlessOfTypeButNotOthersOrForeignOwners(DiagnosisType type) throws Exception {
+        JsonNode body = result(type);
+        long id = save(type, body);
+
+        String json = mockMvc.perform(get("/api/diagnoses/" + id).header("Authorization", "Bearer " + token))
+            .andExpect(status().isOk()).andExpect(jsonPath("$.diagnosisType").value(type.name()))
+            .andReturn().getResponse().getContentAsString();
+        assertEquals(body, mapper.readTree(json).get("result"));
+
+        String other = signupAndLogin("other-" + System.nanoTime() + "@example.com");
+        mockMvc.perform(get("/api/diagnoses/" + id).header("Authorization", "Bearer " + other))
+            .andExpect(status().isNotFound());
+        mockMvc.perform(get("/api/diagnoses/999999").header("Authorization", "Bearer " + token))
             .andExpect(status().isNotFound());
     }
 

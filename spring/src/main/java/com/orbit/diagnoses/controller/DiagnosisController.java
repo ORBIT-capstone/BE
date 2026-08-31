@@ -3,6 +3,7 @@ package com.orbit.diagnoses.controller;
 import com.orbit.diagnoses.domain.DiagnosisType;
 import com.orbit.diagnoses.dto.DiagnosisDetailResponse;
 import com.orbit.diagnoses.dto.DiagnosisResultBodies;
+import com.orbit.diagnoses.dto.DiagnosisSummaryResponse;
 import com.orbit.diagnoses.service.DiagnosisService;
 import com.orbit.global.auth.AuthenticatedUser;
 import com.orbit.global.exception.ErrorResponse;
@@ -14,6 +15,7 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -29,6 +31,26 @@ import tools.jackson.databind.JsonNode;
 @ApiResponse(responseCode = "401", description = "인증 정보가 없거나 유효하지 않음", content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
 public class DiagnosisController {
     private final DiagnosisService diagnosisService;
+
+    @GetMapping
+    @Operation(summary = "진단 목록 조회",
+        description = "로그인한 회원이 저장한 모든 종류의 진단 결과를 생성일 최신순으로 요약 조회합니다. result 원본은 포함하지 않습니다.")
+    public ResponseEntity<List<DiagnosisSummaryResponse>> list(
+        @Parameter(hidden = true) @AuthenticatedUser User user
+    ) {
+        return ResponseEntity.ok(diagnosisService.getSummaries(user.getId()));
+    }
+
+    @GetMapping("/{id}")
+    @Operation(summary = "진단 상세 조회",
+        description = "종류에 상관없이 로그인한 회원 본인이 저장한 진단 결과를 result에 그대로 반환합니다. 재계산하지 않습니다.")
+    @ApiResponse(responseCode = "404", description = "본인 소유의 진단 결과를 찾을 수 없음", content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
+    public ResponseEntity<DiagnosisDetailResponse> get(
+        @Parameter(hidden = true) @AuthenticatedUser User user,
+        @PathVariable Long id
+    ) {
+        return ResponseEntity.ok(diagnosisService.getDetail(user.getId(), id));
+    }
 
     @PostMapping("/retirement/diagnosis")
     @Operation(summary = "은퇴자산 진단 결과 저장",
