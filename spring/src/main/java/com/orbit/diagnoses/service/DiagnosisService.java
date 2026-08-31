@@ -3,10 +3,12 @@ package com.orbit.diagnoses.service;
 import com.orbit.diagnoses.domain.Diagnosis;
 import com.orbit.diagnoses.domain.DiagnosisType;
 import com.orbit.diagnoses.dto.DiagnosisDetailResponse;
+import com.orbit.diagnoses.dto.DiagnosisSummaryResponse;
 import com.orbit.diagnoses.dto.FastApiDiagnosisResponse;
 import com.orbit.diagnoses.exception.DiagnosisNotFoundException;
 import com.orbit.diagnoses.exception.InvalidDiagnosisResultException;
 import com.orbit.diagnoses.repository.DiagnosisRepository;
+import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -51,6 +53,21 @@ public class DiagnosisService {
 
 		// 저장 시 전달받은 결과 전체를 복원한다. 입력값으로 재계산하거나 필드를 재구성하지 않는다.
 		return DiagnosisDetailResponse.from(diagnosis, readResultJson(diagnosis.getResultJson()));
+	}
+
+	@Transactional(readOnly = true)
+	public DiagnosisDetailResponse getDetail(Long userId, Long id) {
+		Diagnosis diagnosis = diagnosisRepository.findByIdAndUserId(id, userId)
+			.orElseThrow(DiagnosisNotFoundException::new);
+
+		return DiagnosisDetailResponse.from(diagnosis, readResultJson(diagnosis.getResultJson()));
+	}
+
+	@Transactional(readOnly = true)
+	public List<DiagnosisSummaryResponse> getSummaries(Long userId) {
+		return diagnosisRepository.findByUserIdOrderByCreatedAtDesc(userId).stream()
+			.map(DiagnosisSummaryResponse::from)
+			.toList();
 	}
 
 	private JsonNode readResultJson(String resultJson) {
