@@ -22,6 +22,7 @@ Thumbs.db
 # Java / Spring Boot / Gradle
 # =========================
 .gradle/
+.gradle-user-home/
 build/
 out/
 target/
