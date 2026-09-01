@@ -47,6 +47,7 @@ public class AuthService {
 		}
 
 		tokenOwner.clearRefreshTokenHash();
+		tokenOwner.clearAccessTokenHash();
 	}
 
 	@Transactional
@@ -66,13 +67,18 @@ public class AuthService {
 	public User getUserFromAuthorizationHeader(String authorizationHeader) {
 		String accessToken = extractBearerToken(authorizationHeader);
 		Long userId = authTokenService.getUserIdFromAccessToken(accessToken);
-		return userRepository.findById(userId)
+		User user = userRepository.findById(userId)
 			.orElseThrow(InvalidTokenException::new);
+		if (!authTokenService.matchesHash(accessToken, user.getAccessTokenHash())) {
+			throw new InvalidTokenException();
+		}
+		return user;
 	}
 
 	private TokenResponse issueTokens(User user) {
 		String accessToken = authTokenService.createAccessToken(user);
 		String refreshToken = authTokenService.createRefreshToken(user);
+		user.updateAccessTokenHash(authTokenService.hashToken(accessToken));
 		user.updateRefreshTokenHash(authTokenService.hashToken(refreshToken));
 		return TokenResponse.bearer(accessToken, refreshToken);
 	}

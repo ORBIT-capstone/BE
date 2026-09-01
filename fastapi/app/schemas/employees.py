@@ -9,7 +9,7 @@ class SimulateRequest(BaseModel):
     current_years: int = Field(..., ge=0)
     current_income: int = Field(..., gt=0)
     current_age: int = Field(..., gt=0)
-    retire_at_age: int = Field(..., gt=0)
+    retire_at_age: int = Field(..., gt=0, le=100)
     service_months_as_of_2016: int | None = Field(
         default=None,
         ge=0,
@@ -30,6 +30,8 @@ class SimulateRequest(BaseModel):
     def validate_retire_at_age(self) -> "SimulateRequest":
         if self.retire_at_age < self.current_age:
             raise ValueError("퇴직 예정 나이는 현재 나이보다 작을 수 없습니다.")
+        if self.current_years > self.current_age:
+            raise ValueError("현재 근속연수는 현재 나이보다 클 수 없습니다.")
         return self
 
 

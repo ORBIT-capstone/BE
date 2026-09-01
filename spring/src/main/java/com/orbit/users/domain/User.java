@@ -33,6 +33,9 @@ public class User {
 	@Column(name = "refresh_token_hash", length = 512)
 	private String refreshTokenHash;
 
+	@Column(name = "access_token_hash", length = 512)
+	private String accessTokenHash;
+
 	@Column(nullable = false, length = 20)
 	private String name;
 
@@ -55,6 +58,9 @@ public class User {
 	@Column(name = "monthly_pension")
 	private Long monthlyPension;
 
+	@Column(name = "monthly_income")
+	private Long monthlyIncome;
+
 	@Builder
 	private User(
 		String email,
@@ -74,8 +80,16 @@ public class User {
 		this.refreshTokenHash = refreshTokenHash;
 	}
 
+	public void updateAccessTokenHash(String accessTokenHash) {
+		this.accessTokenHash = accessTokenHash;
+	}
+
 	public void clearRefreshTokenHash() {
 		this.refreshTokenHash = null;
+	}
+
+	public void clearAccessTokenHash() {
+		this.accessTokenHash = null;
 	}
 
 	public void updateProfile(
@@ -85,7 +99,8 @@ public class User {
 		Long asset,
 		Long monthlyExpenses,
 		Integer currentYears,
-		Long monthlyPension
+		Long monthlyPension,
+		Long monthlyIncome
 	) {
 		if (name != null) {
 			this.name = name;
@@ -107,6 +122,9 @@ public class User {
 		}
 		if (monthlyPension != null) {
 			this.monthlyPension = monthlyPension;
+		}
+		if (monthlyIncome != null) {
+			this.monthlyIncome = monthlyIncome;
 		}
 	}
 }

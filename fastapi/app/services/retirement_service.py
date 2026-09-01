@@ -92,7 +92,9 @@ def simulate_retirement(
 
         current_asset = (current_asset - annual_gap) * (1 + INVESTMENT_RETURN)
 
-        if depletion_age is None and annual_gap > 0 and current_asset <= 0:
+        # MAX_AGE의 한 해를 보낸 뒤 발생하는 고갈은 MAX_AGE + 1 시점이므로
+        # 100세까지의 준비 상태를 평가하는 현재 시뮬레이션 범위에는 포함하지 않는다.
+        if depletion_age is None and annual_gap > 0 and current_asset <= 0 and age < MAX_AGE:
             depletion_age = age + 1
 
         if current_asset < 0:
@@ -101,9 +103,6 @@ def simulate_retirement(
         annual_expense *= 1 + INFLATION_RATE
         annual_income *= 1 + PENSION_GROWTH_RATE
         annual_gap = annual_expense - annual_income
-
-    if depletion_age is not None:
-        depletion_age = min(depletion_age, MAX_AGE)
 
     target_age = get_target_age(gender)
     status = calculate_status(depletion_age, target_age)
@@ -152,7 +151,7 @@ def _expand_upper_bound(condition, seed: float, max_doublings: int = 60) -> floa
 
 def _round_up(value: float, decimals: int = 2) -> float:
     """이진탐색으로 찾은 최소값을 내림 없이 올림하여, 반올림으로 인해
-    목표연령 도달 조건을 다시 벗어나지 않도록 보장한다."""
+    100세까지 무고갈인 SUFFICIENT 조건을 다시 벗어나지 않도록 보장한다."""
     factor = 10**decimals
     return math.ceil(value * factor) / factor
 
@@ -164,10 +163,11 @@ def recommend_retirement(
     asset: float,
     gender: Gender,
 ) -> RecommendationResult:
-    """MIDDLE/INSUFFICIENT 진단 시 목표연령 도달에 필요한 최소 절약액/추가소득액을 계산.
+    """MIDDLE/INSUFFICIENT 진단 시 100세까지 자산이 고갈되지 않는 SUFFICIENT 상태에
+    도달하기 위한 최소 절약액/추가소득액을 계산.
 
     판정 캐스케이드:
-      1) 생활비를 SAVING_CAP_RATIO 한도 내에서 절약하는 것만으로 목표연령에 도달하는지 확인
+      1) 생활비를 SAVING_CAP_RATIO 한도 내에서 절약하는 것만으로 SUFFICIENT에 도달하는지 확인
       2) 절약 상한까지 적용해도 부족하면, 절약 상한을 고정한 채 추가로 필요한 최소 월 소득을 탐색
     모든 시뮬레이션은 diagnose_core()에 위임하며 별도의 자산 계산 로직을 두지 않는다.
     """
