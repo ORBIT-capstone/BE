@@ -21,6 +21,26 @@ from app.services.service_cap_rules import (
 _FIXED_RETIRE_YYYYMM = 202401
 
 
+def test_simulate_request_rejects_service_years_greater_than_current_age():
+    with pytest.raises(ValueError):
+        SimulateRequest(
+            current_years=31,
+            current_income=5_000_000,
+            current_age=30,
+            retire_at_age=60,
+        )
+
+
+def test_simulate_request_rejects_retirement_after_age_100():
+    with pytest.raises(ValueError):
+        SimulateRequest(
+            current_years=20,
+            current_income=5_000_000,
+            current_age=60,
+            retire_at_age=101,
+        )
+
+
 # --- service_cap_rules.resolve_pension_service_cap_months ---
 
 
@@ -126,11 +146,12 @@ def test_calculate_monthly_pension_farther_retirement_uses_fewer_pre_2010_months
 
 
 def _build_request(service_months_as_of_2016: int | None, service_years: int) -> SimulateRequest:
+    current_age = max(30, service_years + 20)
     return SimulateRequest(
         current_years=service_years,
         current_income=5_000_000,
-        current_age=30,
-        retire_at_age=30 + service_years,
+        current_age=current_age,
+        retire_at_age=min(current_age + 10, 100),
         service_months_as_of_2016=service_months_as_of_2016,
     )
 

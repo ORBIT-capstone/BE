@@ -27,7 +27,7 @@ public class AuthController {
 	private final AuthService authService;
 
 	@PostMapping("/refresh")
-	@Operation(summary = "토큰 재발급", description = "리프레시 토큰을 검증하고 새 액세스 토큰과 리프레시 토큰을 발급합니다.")
+	@Operation(summary = "토큰 재발급", description = "리프레시 토큰을 검증하고 새 액세스 토큰과 리프레시 토큰을 발급합니다. 기존 액세스 토큰과 리프레시 토큰은 즉시 무효화됩니다.")
 	@ApiResponses({
 		@ApiResponse(responseCode = "400", description = "요청 값 검증 실패", content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
 		@ApiResponse(responseCode = "401", description = "유효하지 않은 리프레시 토큰", content = @Content(schema = @Schema(implementation = ErrorResponse.class)))

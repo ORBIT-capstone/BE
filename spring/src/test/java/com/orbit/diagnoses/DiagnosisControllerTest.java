@@ -297,4 +297,38 @@ class DiagnosisControllerTest {
             assertFalse(operation.get("responses").has("502"));
         }
     }
+
+    @Test
+    void openApiDocumentsSuccessfulGetResponseSchemas() throws Exception {
+        JsonNode api = mapper.readTree(mockMvc.perform(get("/api/v3/api-docs"))
+            .andExpect(status().isOk()).andReturn().getResponse().getContentAsString());
+
+        JsonNode listSchema = api.get("paths").get("/api/diagnoses").get("get")
+            .get("responses").get("200").get("content").get("application/json").get("schema");
+        assertEquals("array", listSchema.get("type").asString());
+        assertEquals("#/components/schemas/DiagnosisSummaryResponse",
+            listSchema.get("items").get("$ref").asString());
+
+        List<String> detailPaths = new ArrayList<>();
+        detailPaths.add("/api/diagnoses/{id}");
+        for (DiagnosisType type : DiagnosisType.values()) {
+            detailPaths.add(path(type) + "/{id}");
+        }
+        for (String detailPath : detailPaths) {
+            JsonNode detailSchema = api.get("paths").get(detailPath).get("get")
+                .get("responses").get("200").get("content").get("application/json").get("schema");
+            assertEquals("#/components/schemas/DiagnosisDetailResponse", detailSchema.get("$ref").asString(), detailPath);
+        }
+    }
+
+    @Test
+    void deletingUserAlsoDeletesOwnedDiagnoses() throws Exception {
+        long id = save(DiagnosisType.RETIREMENT_ASSET, result(DiagnosisType.RETIREMENT_ASSET));
+        assertTrue(diagnoses.existsById(id));
+
+        mockMvc.perform(delete("/api/users/me").header("Authorization", "Bearer " + token))
+            .andExpect(status().isOk());
+
+        assertFalse(diagnoses.existsById(id));
+    }
 }

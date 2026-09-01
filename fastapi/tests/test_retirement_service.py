@@ -118,9 +118,9 @@ def test_simulate_retirement_gap_matches_expense_minus_income_when_pension_grows
         assert point.annual_gap == pytest.approx(point.annual_expense - point.annual_income)
 
 
-def test_simulate_retirement_depletion_age_capped_at_max_age():
-    # 자산이 asset(현재=99세)에서 1년은 버티지만 age=100(마지막 루프)에서 고갈되어,
-    # 캡이 없다면 depletion_age가 101로 계산될 조건
+def test_simulate_retirement_is_sufficient_when_asset_lasts_through_max_age():
+    # 100세 시점에는 자산이 남아 있고 그해를 보낸 뒤에야 고갈되는 조건이다.
+    # 평가 범위가 100세까지이므로 101세 고갈은 기록하지 않고 SUFFICIENT로 판정한다.
     result = simulate_retirement(
         current_age=99,
         monthly_expenses=1_000,
@@ -129,7 +129,11 @@ def test_simulate_retirement_depletion_age_capped_at_max_age():
         gender="male",
     )
 
-    assert result.depletion_age == MAX_AGE
+    assert result.timeline[-1].age == MAX_AGE
+    assert result.timeline[-1].asset > 0
+    assert result.depletion_age is None
+    assert result.depleted is False
+    assert result.status == ReadinessStatus.SUFFICIENT
 
 
 def test_recommend_retirement_sufficient_when_baseline_already_sufficient():

@@ -12,6 +12,26 @@ PREPARE migration_stmt FROM @ddl;
 EXECUTE migration_stmt;
 DEALLOCATE PREPARE migration_stmt;
 
+SET @ddl = IF(
+    EXISTS(SELECT 1 FROM information_schema.columns
+           WHERE table_schema = DATABASE() AND table_name = 'users' AND column_name = 'monthly_income'),
+    'SELECT 1',
+    'ALTER TABLE users ADD COLUMN monthly_income BIGINT NULL'
+);
+PREPARE migration_stmt FROM @ddl;
+EXECUTE migration_stmt;
+DEALLOCATE PREPARE migration_stmt;
+
+SET @ddl = IF(
+    EXISTS(SELECT 1 FROM information_schema.columns
+           WHERE table_schema = DATABASE() AND table_name = 'users' AND column_name = 'access_token_hash'),
+    'SELECT 1',
+    'ALTER TABLE users ADD COLUMN access_token_hash VARCHAR(512) NULL'
+);
+PREPARE migration_stmt FROM @ddl;
+EXECUTE migration_stmt;
+DEALLOCATE PREPARE migration_stmt;
+
 -- Employee/scenario results do not have a top-level readiness status.
 -- Hibernate schema update does not reliably relax existing NOT NULL constraints.
 ALTER TABLE diagnoses MODIFY COLUMN status VARCHAR(20) NULL;
