@@ -37,7 +37,10 @@ def diagnose(req: DiagnosisRequest) -> SimulationResult:
     "/recommendations",
     response_model=RecommendationResult,
     summary="은퇴 자산 준비 추천",
-    description="MIDDLE/INSUFFICIENT 판정 시 목표연령 도달에 필요한 최소 절약액/추가소득액을 계산",
+    description=(
+        "MIDDLE/INSUFFICIENT 판정 시 100세까지 자산이 고갈되지 않는 "
+        "SUFFICIENT 상태에 도달하기 위한 최소 절약액/추가소득액을 계산"
+    ),
 )
 def recommend(req: RecommendationRequest) -> RecommendationResult:
     return recommend_retirement(
