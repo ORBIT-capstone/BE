@@ -37,7 +37,8 @@ public class DiagnosisController {
     @Operation(summary = "진단 목록 조회",
         description = "로그인한 회원이 저장한 모든 종류의 진단 결과를 생성일 최신순으로 요약 조회합니다. result 원본은 포함하지 않습니다.")
     @ApiResponse(responseCode = "200", description = "진단 목록 조회 성공",
-        content = @Content(array = @ArraySchema(schema = @Schema(implementation = DiagnosisSummaryResponse.class))))
+        content = @Content(mediaType = org.springframework.http.MediaType.APPLICATION_JSON_VALUE,
+            array = @ArraySchema(schema = @Schema(implementation = DiagnosisSummaryResponse.class))))
     public ResponseEntity<List<DiagnosisSummaryResponse>> list(
         @Parameter(hidden = true) @AuthenticatedUser User user
     ) {
@@ -48,7 +49,8 @@ public class DiagnosisController {
     @Operation(summary = "진단 상세 조회",
         description = "종류에 상관없이 로그인한 회원 본인이 저장한 진단 결과를 result에 그대로 반환합니다. 재계산하지 않습니다.")
     @ApiResponse(responseCode = "200", description = "진단 상세 조회 성공",
-        content = @Content(schema = @Schema(implementation = DiagnosisDetailResponse.class)))
+        content = @Content(mediaType = org.springframework.http.MediaType.APPLICATION_JSON_VALUE,
+            schema = @Schema(implementation = DiagnosisDetailResponse.class)))
     @ApiResponse(responseCode = "404", description = "본인 소유의 진단 결과를 찾을 수 없음", content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
     public ResponseEntity<DiagnosisDetailResponse> get(
         @Parameter(hidden = true) @AuthenticatedUser User user,
@@ -76,7 +78,8 @@ public class DiagnosisController {
     @Operation(summary = "은퇴자산 진단 결과 조회",
         description = "본인이 저장한 해당 기능의 계산 응답 전체를 result에 그대로 반환합니다. 재계산하지 않습니다.")
     @ApiResponse(responseCode = "200", description = "은퇴자산 진단 결과 조회 성공",
-        content = @Content(schema = @Schema(implementation = DiagnosisDetailResponse.class)))
+        content = @Content(mediaType = org.springframework.http.MediaType.APPLICATION_JSON_VALUE,
+            schema = @Schema(implementation = DiagnosisDetailResponse.class)))
     @ApiResponse(responseCode = "404", description = "본인 소유의 해당 기능 결과를 찾을 수 없음", content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
     public ResponseEntity<DiagnosisDetailResponse> getRetirementAsset(
         @Parameter(hidden = true) @AuthenticatedUser User user,
@@ -104,7 +107,8 @@ public class DiagnosisController {
     @Operation(summary = "재취업 연금 감액 계산 결과 조회",
         description = "본인이 저장한 해당 기능의 계산 응답 전체를 result에 그대로 반환합니다. 재계산하지 않습니다.")
     @ApiResponse(responseCode = "200", description = "재취업 연금 감액 계산 결과 조회 성공",
-        content = @Content(schema = @Schema(implementation = DiagnosisDetailResponse.class)))
+        content = @Content(mediaType = org.springframework.http.MediaType.APPLICATION_JSON_VALUE,
+            schema = @Schema(implementation = DiagnosisDetailResponse.class)))
     @ApiResponse(responseCode = "404", description = "본인 소유의 해당 기능 결과를 찾을 수 없음", content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
     public ResponseEntity<DiagnosisDetailResponse> getPensionReduction(
         @Parameter(hidden = true) @AuthenticatedUser User user,
@@ -132,7 +136,8 @@ public class DiagnosisController {
     @Operation(summary = "노후 준비 개선 추천 결과 조회",
         description = "본인이 저장한 해당 기능의 계산 응답 전체를 result에 그대로 반환합니다. 재계산하지 않습니다.")
     @ApiResponse(responseCode = "200", description = "노후 준비 개선 추천 결과 조회 성공",
-        content = @Content(schema = @Schema(implementation = DiagnosisDetailResponse.class)))
+        content = @Content(mediaType = org.springframework.http.MediaType.APPLICATION_JSON_VALUE,
+            schema = @Schema(implementation = DiagnosisDetailResponse.class)))
     @ApiResponse(responseCode = "404", description = "본인 소유의 해당 기능 결과를 찾을 수 없음", content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
     public ResponseEntity<DiagnosisDetailResponse> getRetirementRecommendation(
         @Parameter(hidden = true) @AuthenticatedUser User user,
@@ -160,7 +165,8 @@ public class DiagnosisController {
     @Operation(summary = "재직자 연금 시뮬레이션 결과 조회",
         description = "본인이 저장한 해당 기능의 계산 응답 전체를 result에 그대로 반환합니다. 재계산하지 않습니다.")
     @ApiResponse(responseCode = "200", description = "재직자 연금 시뮬레이션 결과 조회 성공",
-        content = @Content(schema = @Schema(implementation = DiagnosisDetailResponse.class)))
+        content = @Content(mediaType = org.springframework.http.MediaType.APPLICATION_JSON_VALUE,
+            schema = @Schema(implementation = DiagnosisDetailResponse.class)))
     @ApiResponse(responseCode = "404", description = "본인 소유의 해당 기능 결과를 찾을 수 없음", content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
     public ResponseEntity<DiagnosisDetailResponse> getEmployeePension(
         @Parameter(hidden = true) @AuthenticatedUser User user,
@@ -188,7 +194,8 @@ public class DiagnosisController {
     @Operation(summary = "수령방식별 시나리오 비교 결과 조회",
         description = "본인이 저장한 해당 기능의 계산 응답 전체를 result에 그대로 반환합니다. 재계산하지 않습니다.")
     @ApiResponse(responseCode = "200", description = "수령방식별 시나리오 비교 결과 조회 성공",
-        content = @Content(schema = @Schema(implementation = DiagnosisDetailResponse.class)))
+        content = @Content(mediaType = org.springframework.http.MediaType.APPLICATION_JSON_VALUE,
+            schema = @Schema(implementation = DiagnosisDetailResponse.class)))
     @ApiResponse(responseCode = "404", description = "본인 소유의 해당 기능 결과를 찾을 수 없음", content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
     public ResponseEntity<DiagnosisDetailResponse> getReceiptScenarios(
         @Parameter(hidden = true) @AuthenticatedUser User user,
