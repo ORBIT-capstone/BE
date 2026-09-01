@@ -55,7 +55,7 @@ public class UserController {
 	}
 
 	@PostMapping("/login")
-	@Operation(summary = "로그인", description = "이메일과 비밀번호로 로그인하고 액세스 토큰과 리프레시 토큰을 발급합니다.")
+	@Operation(summary = "로그인", description = "이메일과 비밀번호로 로그인하고 액세스 토큰과 리프레시 토큰을 발급합니다. 사용자당 하나의 로그인 세션만 유지되며, 다시 로그인하면 이전 토큰은 무효화됩니다.")
 	@ApiResponses({
 		@ApiResponse(responseCode = "400", description = "로그인 입력값 검증 실패", content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
 		@ApiResponse(responseCode = "401", description = "이메일 또는 비밀번호 불일치", content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
@@ -67,7 +67,10 @@ public class UserController {
 	@GetMapping("/me")
 	@SecurityRequirement(name = "bearerAuth")
 	@Operation(summary = "회원 정보 조회", description = "현재 로그인한 회원의 정보를 조회합니다.")
-	@ApiResponse(responseCode = "401", description = "인증 정보가 없거나 유효하지 않음", content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
+	@ApiResponses({
+		@ApiResponse(responseCode = "200", description = "회원 정보 조회 성공", content = @Content(schema = @Schema(implementation = UserResponse.class))),
+		@ApiResponse(responseCode = "401", description = "인증 정보가 없거나 유효하지 않음", content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
+	})
 	public ResponseEntity<UserResponse> getMe(
 		@Parameter(hidden = true) @AuthenticatedUser User user
 	) {
@@ -76,7 +79,7 @@ public class UserController {
 
 	@PatchMapping("/me")
 	@SecurityRequirement(name = "bearerAuth")
-	@Operation(summary = "회원 정보 수정", description = "이름, 생년월일, 성별, 보유 자산(원), 월 지출액(원), 현재 근속연수, 월 연금 수령액(원)을 선택적으로 수정합니다. 생략/null은 기존 값을 유지합니다.")
+	@Operation(summary = "회원 정보 수정", description = "이름, 생년월일, 성별, 보유 자산(원), 월 지출액(원), 현재 근속연수, 월 연금 수령액(원), 세전 월 소득(원)을 선택적으로 수정합니다. 생략/null은 기존 값을 유지합니다.")
 	@ApiResponses({
 		@ApiResponse(responseCode = "400", description = "회원 정보 입력값 검증 실패", content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
 		@ApiResponse(responseCode = "401", description = "인증 정보가 없거나 유효하지 않음", content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
@@ -91,7 +94,7 @@ public class UserController {
 
 	@PostMapping("/logout")
 	@SecurityRequirement(name = "bearerAuth")
-	@Operation(summary = "로그아웃", description = "리프레시 토큰을 검증하고 무효화합니다.")
+	@Operation(summary = "로그아웃", description = "액세스 토큰과 리프레시 토큰을 검증하고 모두 즉시 무효화합니다.")
 	@ApiResponses({
 		@ApiResponse(responseCode = "400", description = "요청 값 검증 실패", content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
 		@ApiResponse(responseCode = "401", description = "액세스 토큰 또는 리프레시 토큰이 유효하지 않음", content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
@@ -106,7 +109,7 @@ public class UserController {
 
 	@DeleteMapping("/me")
 	@SecurityRequirement(name = "bearerAuth")
-	@Operation(summary = "회원 탈퇴", description = "현재 로그인한 사용자를 탈퇴 처리합니다.")
+	@Operation(summary = "회원 탈퇴", description = "현재 로그인한 사용자와 사용자가 저장한 모든 진단 기록을 함께 삭제합니다.")
 	@ApiResponse(responseCode = "401", description = "인증 정보가 없거나 유효하지 않음", content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
 	public ResponseEntity<MessageResponse> deleteMe(
 		@Parameter(hidden = true) @AuthenticatedUser User user

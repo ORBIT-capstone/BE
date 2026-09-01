@@ -55,7 +55,7 @@ class RecommendationType(str, Enum):
     """추천 유형"""
 
     SUFFICIENT = "SUFFICIENT"  # 이미 준비 상태가 충분하여 추천 불필요
-    SAVING_ONLY = "SAVING_ONLY"  # 생활비 절약만으로 목표연령 도달 가능
+    SAVING_ONLY = "SAVING_ONLY"  # 생활비 절약만으로 100세까지 무고갈 달성 가능
     SAVING_AND_INCOME = "SAVING_AND_INCOME"  # 절약 상한을 적용하고도 추가 소득이 필요
 
 
@@ -64,7 +64,7 @@ class RecommendationResult(BaseModel):
     recommendation_type: RecommendationType  # 추천 유형
     required_saving: WonAmountOutput  # 필요 월 절약액 (원)
     required_income: WonAmountOutput  # 필요 월 추가 소득액 (원)
-    target_status: ReadinessStatus  # 추천 산정에 사용된 목표 기준 (항상 SUFFICIENT="고갈 없음")
+    target_status: ReadinessStatus  # 추천 산정 목표 (항상 SUFFICIENT="100세까지 고갈 없음")
     depletion_age: int | None  # 개선 적용 후 자산 고갈 나이
     depleted: bool  # 개선 적용 후 자산 고갈 여부 (depletion_age is not None과 항상 일치)
     target_age: int  # 목표연령

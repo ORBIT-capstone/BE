@@ -59,7 +59,7 @@ class AuthFlowTest {
 	}
 
 	@Test
-	void logoutInvalidatesRefreshToken() throws Exception {
+	void logoutInvalidatesRefreshAndAccessTokens() throws Exception {
 		JsonNode tokens = login();
 		String access = tokens.get("accessToken").asString();
 		String refresh = tokens.get("refreshToken").asString();
@@ -69,6 +69,8 @@ class AuthFlowTest {
 		mockMvc.perform(post("/api/auth/refresh").contentType(MediaType.APPLICATION_JSON)
 			.content("{\"refreshToken\":\"" + refresh + "\"}"))
 			.andExpect(status().isUnauthorized());
+		mockMvc.perform(get("/api/users/me").header("Authorization", "Bearer " + access))
+			.andExpect(status().isUnauthorized()).andExpect(jsonPath("$.code").value("INVALID_TOKEN"));
 	}
 
 	@Test
@@ -99,12 +101,13 @@ class AuthFlowTest {
 		org.junit.jupiter.api.Assertions.assertTrue(initial.get("monthlyExpenses").isNull());
 		org.junit.jupiter.api.Assertions.assertTrue(initial.get("currentYears").isNull());
 		org.junit.jupiter.api.Assertions.assertTrue(initial.get("monthlyPension").isNull());
+		org.junit.jupiter.api.Assertions.assertTrue(initial.get("monthlyIncome").isNull());
 		mockMvc.perform(patch("/api/users/me").header("Authorization", "Bearer " + access)
 			.contentType(MediaType.APPLICATION_JSON).content("""
-				{"asset":100000000,"monthlyExpenses":2500000,"currentYears":20,"monthlyPension":1500000}
+				{"asset":100000000,"monthlyExpenses":2500000,"currentYears":20,"monthlyPension":1500000,"monthlyIncome":4000000}
 				""")).andExpect(status().isOk()).andExpect(jsonPath("$.asset").value(100000000))
 			.andExpect(jsonPath("$.monthlyExpenses").value(2500000)).andExpect(jsonPath("$.currentYears").value(20))
-			.andExpect(jsonPath("$.monthlyPension").value(1500000));
+			.andExpect(jsonPath("$.monthlyPension").value(1500000)).andExpect(jsonPath("$.monthlyIncome").value(4000000));
 		mockMvc.perform(patch("/api/users/me").header("Authorization", "Bearer " + access)
 			.contentType(MediaType.APPLICATION_JSON).content("""
 				{"name":"수정이름","asset":null,"currentYears":0,"monthlyPension":null}
@@ -113,21 +116,23 @@ class AuthFlowTest {
 			.andExpect(status().isOk()).andExpect(jsonPath("$.asset").value(100000000))
 			.andExpect(jsonPath("$.monthlyExpenses").value(2500000)).andExpect(jsonPath("$.currentYears").value(0))
 			.andExpect(jsonPath("$.name").value("수정이름"))
-			.andExpect(jsonPath("$.monthlyPension").value(1500000));
+			.andExpect(jsonPath("$.monthlyPension").value(1500000)).andExpect(jsonPath("$.monthlyIncome").value(4000000));
 		mockMvc.perform(patch("/api/users/me").header("Authorization", "Bearer " + access)
 			.contentType(MediaType.APPLICATION_JSON).content("""
-				{"monthlyPension":0}
-				""")).andExpect(status().isOk()).andExpect(jsonPath("$.monthlyPension").value(0));
+				{"monthlyPension":0,"monthlyIncome":0}
+				""")).andExpect(status().isOk()).andExpect(jsonPath("$.monthlyPension").value(0))
+			.andExpect(jsonPath("$.monthlyIncome").value(0));
 		mockMvc.perform(patch("/api/users/me").header("Authorization", "Bearer " + access)
 			.contentType(MediaType.APPLICATION_JSON).content("{}")).andExpect(status().isOk());
 		mockMvc.perform(get("/api/users/me").header("Authorization", "Bearer " + access))
-			.andExpect(status().isOk()).andExpect(jsonPath("$.monthlyPension").value(0));
+			.andExpect(status().isOk()).andExpect(jsonPath("$.monthlyPension").value(0))
+			.andExpect(jsonPath("$.monthlyIncome").value(0));
 	}
 
 	@Test
 	void negativeFinancialProfileValuesAreRejectedWithoutChangingUser() throws Exception {
 		String access = login().get("accessToken").asString();
-		for (String field : java.util.List.of("asset", "monthlyExpenses", "currentYears", "monthlyPension")) {
+		for (String field : java.util.List.of("asset", "monthlyExpenses", "currentYears", "monthlyPension", "monthlyIncome")) {
 			mockMvc.perform(patch("/api/users/me").header("Authorization", "Bearer " + access)
 				.contentType(MediaType.APPLICATION_JSON).content("{\"" + field + "\":-1}"))
 				.andExpect(status().isBadRequest()).andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
@@ -136,6 +141,33 @@ class AuthFlowTest {
 			.andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
 		org.junit.jupiter.api.Assertions.assertTrue(objectMapper.readTree(response).get("asset").isNull());
 		org.junit.jupiter.api.Assertions.assertTrue(objectMapper.readTree(response).get("monthlyPension").isNull());
+		org.junit.jupiter.api.Assertions.assertTrue(objectMapper.readTree(response).get("monthlyIncome").isNull());
+	}
+
+	@Test
+	void openApiDocumentsMonthlyIncomeAndGetMeSuccessResponse() throws Exception {
+		JsonNode api = objectMapper.readTree(mockMvc.perform(get("/api/v3/api-docs"))
+			.andExpect(status().isOk()).andReturn().getResponse().getContentAsString());
+		JsonNode schemas = api.get("components").get("schemas");
+
+		JsonNode updateMonthlyIncome = schemas.get("UpdateUserRequest").get("properties").get("monthlyIncome");
+		org.junit.jupiter.api.Assertions.assertNotNull(updateMonthlyIncome);
+		JsonNode responseMonthlyIncome = schemas.get("UserResponse").get("properties").get("monthlyIncome");
+		org.junit.jupiter.api.Assertions.assertNotNull(responseMonthlyIncome);
+
+		String responseRef = api.get("paths").get("/api/users/me").get("get")
+			.get("responses").get("200").get("content").get("application/json").get("schema").get("$ref").asString();
+		org.junit.jupiter.api.Assertions.assertEquals("#/components/schemas/UserResponse", responseRef);
+
+		JsonNode paths = api.get("paths");
+		org.junit.jupiter.api.Assertions.assertTrue(paths.get("/api/users/login").get("post")
+			.get("description").asString().contains("이전 토큰은 무효화"));
+		org.junit.jupiter.api.Assertions.assertTrue(paths.get("/api/users/logout").get("post")
+			.get("description").asString().contains("모두 즉시 무효화"));
+		org.junit.jupiter.api.Assertions.assertTrue(paths.get("/api/auth/refresh").get("post")
+			.get("description").asString().contains("기존 액세스 토큰과 리프레시 토큰"));
+		org.junit.jupiter.api.Assertions.assertTrue(paths.get("/api/users/me").get("delete")
+			.get("description").asString().contains("모든 진단 기록"));
 	}
 
 	private JsonNode login() throws Exception {
