@@ -95,7 +95,7 @@ public class AuthTokenService {
 
 			String tokenType = claims[2];
 			long expiresAt = Long.parseLong(claims[3]);
-			if (!requiredType.equals(tokenType) || Instant.now().getEpochSecond() > expiresAt) {
+			if (!requiredType.equals(tokenType) || Instant.now().getEpochSecond() >= expiresAt) {
 				throw new InvalidTokenException();
 			}
 

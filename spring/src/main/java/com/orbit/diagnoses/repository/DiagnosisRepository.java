@@ -13,4 +13,6 @@ public interface DiagnosisRepository extends JpaRepository<Diagnosis, Long> {
 	Optional<Diagnosis> findByIdAndUserId(Long id, Long userId);
 
 	List<Diagnosis> findByUserIdOrderByCreatedAtDesc(Long userId);
+
+	void deleteAllByUserId(Long userId);
 }

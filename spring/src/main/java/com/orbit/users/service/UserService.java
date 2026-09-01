@@ -1,5 +1,6 @@
 package com.orbit.users.service;
 
+import com.orbit.diagnoses.repository.DiagnosisRepository;
 import com.orbit.users.domain.User;
 import com.orbit.users.dto.SignupRequest;
 import com.orbit.users.dto.UpdateUserRequest;
@@ -8,6 +9,7 @@ import com.orbit.users.exception.InvalidTokenException;
 import com.orbit.users.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -16,6 +18,7 @@ import org.springframework.transaction.annotation.Transactional;
 public class UserService {
 
 	private final UserRepository userRepository;
+	private final DiagnosisRepository diagnosisRepository;
 	private final PasswordEncoder passwordEncoder;
 
 	@Transactional
@@ -32,11 +35,17 @@ public class UserService {
 			.gender(request.gender())
 			.build();
 
-		userRepository.save(user);
+		try {
+			// flush 시점까지 unique 제약 위반을 확인해 동시 가입도 일관되게 409로 변환한다.
+			userRepository.saveAndFlush(user);
+		} catch (DataIntegrityViolationException exception) {
+			throw new DuplicateEmailException();
+		}
 	}
 
 	@Transactional
 	public void delete(User user) {
+		diagnosisRepository.deleteAllByUserId(user.getId());
 		userRepository.delete(user);
 	}
 
@@ -52,7 +61,8 @@ public class UserService {
 			request.asset(),
 			request.monthlyExpenses(),
 			request.currentYears(),
-			request.monthlyPension()
+			request.monthlyPension(),
+			request.monthlyIncome()
 		);
 
 		return user;
