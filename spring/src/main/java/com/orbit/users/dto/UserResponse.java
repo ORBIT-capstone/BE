@@ -29,7 +29,10 @@ public record UserResponse(
 	Integer currentYears,
 
 	@Schema(description = "월 연금 수령액(원)", nullable = true)
-	Long monthlyPension
+	Long monthlyPension,
+
+	@Schema(description = "세전 월 소득(원)", example = "4000000", nullable = true)
+	Long monthlyIncome
 ) {
 
 	public static UserResponse from(User user) {
@@ -41,7 +44,8 @@ public record UserResponse(
 			user.getAsset(),
 			user.getMonthlyExpenses(),
 			user.getCurrentYears(),
-			user.getMonthlyPension()
+			user.getMonthlyPension(),
+			user.getMonthlyIncome()
 		);
 	}
 }
