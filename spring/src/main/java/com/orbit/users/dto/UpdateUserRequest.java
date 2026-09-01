@@ -36,6 +36,10 @@ public record UpdateUserRequest(
 
 	@Schema(description = "월 연금 수령액(원). 생략/null이면 기존 값 유지", nullable = true)
 	@PositiveOrZero
-	Long monthlyPension
+	Long monthlyPension,
+
+	@Schema(description = "세전 월 소득(원). 생략/null이면 기존 값 유지", example = "4000000", nullable = true)
+	@PositiveOrZero
+	Long monthlyIncome
 ) {
 }
